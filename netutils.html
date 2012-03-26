@@ -1,0 +1,133 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html><head><title>Python: module netutils</title>
+</head><body bgcolor="#f0f0f8">
+
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="heading">
+<tr bgcolor="#7799ee">
+<td valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial">&nbsp;<br><big><big><strong>netutils</strong></big></big></font></td
+><td align=right valign=bottom
+><font color="#ffffff" face="helvetica, arial"><a href=".">index</a><br><a href="file:/home/akkana/bin/netutils.py">/home/akkana/bin/netutils.py</a></font></td></tr></table>
+    <p><tt>netutils:&nbsp;a&nbsp;set&nbsp;of&nbsp;networking&nbsp;utilities&nbsp;for&nbsp;Python.<br>
+Copyright&nbsp;2010&nbsp;by&nbsp;Akkana&nbsp;Peck&nbsp;&lt;akkana@shallowsky.com&gt;<br>
+&nbsp;...&nbsp;share&nbsp;and&nbsp;enjoy&nbsp;under&nbsp;the&nbsp;GPLv2&nbsp;or&nbsp;(at&nbsp;your&nbsp;option)&nbsp;later.<br>
+&nbsp;<br>
+Provides&nbsp;the&nbsp;following:<br>
+&nbsp;<br>
+Classes:<br>
+&nbsp;&nbsp;<a href="#NetInterface">NetInterface</a>:&nbsp;name,&nbsp;ip,&nbsp;broadcast,&nbsp;netmask,&nbsp;essid,&nbsp;encryption,&nbsp;wireless<br>
+&nbsp;&nbsp;<a href="#AccessPoint">AccessPoint</a>&nbsp;:&nbsp;address,&nbsp;essid,&nbsp;encryption,&nbsp;quality,&nbsp;interface<br>
+&nbsp;&nbsp;<a href="#Route">Route</a>&nbsp;:&nbsp;display&nbsp;or&nbsp;change&nbsp;network&nbsp;routing&nbsp;tables.<br>
+&nbsp;<br>
+Functions&nbsp;outside&nbsp;of&nbsp;classes:<br>
+&nbsp;&nbsp;<a href="#-get_interfaces">get_interfaces</a>(only_up=False):&nbsp;returns&nbsp;a&nbsp;list&nbsp;of&nbsp;all&nbsp;<a href="#NetInterface">NetInterface</a>.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;If&nbsp;only_up,&nbsp;will&nbsp;only&nbsp;return&nbsp;the&nbsp;ones&nbsp;currently&nbsp;marked&nbsp;UP.<br>
+&nbsp;&nbsp;<a href="#-get_wireless_interfaces">get_wireless_interfaces</a>():&nbsp;returns&nbsp;a&nbsp;list&nbsp;of&nbsp;wireless&nbsp;<a href="#NetInterface">NetInterface</a>.<br>
+&nbsp;&nbsp;<a href="#-get_accesspoints">get_accesspoints</a>():&nbsp;returns&nbsp;a&nbsp;list&nbsp;of&nbsp;visible&nbsp;AccessPoints.<br>
+&nbsp;&nbsp;<a href="#-ifdown_all">ifdown_all</a>():&nbsp;take&nbsp;all&nbsp;interfaces&nbsp;down,&nbsp;killing&nbsp;any&nbsp;wpa_supplicant&nbsp;or&nbsp;dhcp<br>
+&nbsp;&nbsp;<a href="#-kill_by_name">kill_by_name</a>(namelist):&nbsp;Kill&nbsp;a&nbsp;any&nbsp;running&nbsp;processes&nbsp;that&nbsp;include&nbsp;any<br>
+&nbsp;&nbsp;&nbsp;&nbsp;of&nbsp;the&nbsp;names&nbsp;in&nbsp;namelist.&nbsp;Return&nbsp;a&nbsp;list&nbsp;of&nbsp;actual&nbsp;process&nbsp;names&nbsp;killed.</tt></p>
+<p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#aa55cc">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Modules</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#aa55cc"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><table width="100%" summary="list"><tr><td width="25%" valign=top><a href="os.html">os</a><br>
+</td><td width="25%" valign=top><a href="re.html">re</a><br>
+</td><td width="25%" valign=top><a href="subprocess.html">subprocess</a><br>
+</td><td width="25%" valign=top></td></tr></table></td></tr></table><p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ee77aa">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Classes</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#ee77aa"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><dl>
+<dt><font face="helvetica, arial"><a href="netutils.html#AccessPoint">AccessPoint</a>
+</font></dt><dt><font face="helvetica, arial"><a href="netutils.html#NetInterface">NetInterface</a>
+</font></dt><dt><font face="helvetica, arial"><a href="netutils.html#Route">Route</a>
+</font></dt></dl>
+ <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="AccessPoint">class <strong>AccessPoint</strong></a></font></td></tr>
+    
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt>One&nbsp;Cell&nbsp;or&nbsp;<a href="#AccessPoint">AccessPoint</a>&nbsp;from&nbsp;iwlist&nbsp;output<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
+<td width="100%">Methods defined here:<br>
+<dl><dt><a name="AccessPoint-__init__"><strong>__init__</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="AccessPoint-clear"><strong>clear</strong></a>(self)</dt><dd><tt>Clear&nbsp;all&nbsp;parameters</tt></dd></dl>
+
+</td></tr></table> <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="NetInterface">class <strong>NetInterface</strong></a></font></td></tr>
+    
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt>A&nbsp;network&nbsp;interface,&nbsp;like&nbsp;eth1&nbsp;or&nbsp;wlan0.<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
+<td width="100%">Methods defined here:<br>
+<dl><dt><a name="NetInterface-__init__"><strong>__init__</strong></a>(self, name)</dt></dl>
+
+<dl><dt><a name="NetInterface-__repr__"><strong>__repr__</strong></a>(self)</dt><dd><tt>Prettyprint&nbsp;a&nbsp;<a href="#NetInterface">NetInterface</a>&nbsp;instance</tt></dd></dl>
+
+<dl><dt><a name="NetInterface-ifconfig_down"><strong>ifconfig_down</strong></a>(self)</dt><dd><tt>Mark&nbsp;the&nbsp;interface&nbsp;DOWN&nbsp;with&nbsp;ifconfig</tt></dd></dl>
+
+<dl><dt><a name="NetInterface-ifconfig_up"><strong>ifconfig_up</strong></a>(self)</dt><dd><tt>Mark&nbsp;the&nbsp;interface&nbsp;UP&nbsp;with&nbsp;ifconfig</tt></dd></dl>
+
+</td></tr></table> <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="Route">class <strong>Route</strong></a></font></td></tr>
+    
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt>Network&nbsp;routing&nbsp;table&nbsp;entry:&nbsp;one&nbsp;line&nbsp;from&nbsp;route&nbsp;-n<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
+<td width="100%">Methods defined here:<br>
+<dl><dt><a name="Route-__init__"><strong>__init__</strong></a>(self, *args)</dt><dd><tt>#&nbsp;<a href="#Route">Route</a>(line)<br>
+#&nbsp;<a href="#Route">Route</a>(dest,&nbsp;gateway,&nbsp;iface,&nbsp;mask=None)&nbsp;:</tt></dd></dl>
+
+<dl><dt><a name="Route-__repr__"><strong>__repr__</strong></a>(self)</dt><dd><tt>Return&nbsp;a&nbsp;string&nbsp;representing&nbsp;the&nbsp;route</tt></dd></dl>
+
+<dl><dt><a name="Route-add"><strong>add</strong></a>(self)</dt><dd><tt>Add&nbsp;this&nbsp;route&nbsp;to&nbsp;the&nbsp;routing&nbsp;tables.</tt></dd></dl>
+
+<dl><dt><a name="Route-call_route"><strong>call_route</strong></a>(self, cmd)</dt><dd><tt>Backend&nbsp;routine&nbsp;to&nbsp;call&nbsp;the&nbsp;system&nbsp;route&nbsp;command.<br>
+cmd&nbsp;is&nbsp;either&nbsp;"add"&nbsp;or&nbsp;"delete".<br>
+Users&nbsp;should&nbsp;normally&nbsp;call&nbsp;<a href="#Route-add">add</a>()&nbsp;or&nbsp;<a href="#Route-delete">delete</a>()&nbsp;instead.</tt></dd></dl>
+
+<dl><dt><a name="Route-delete"><strong>delete</strong></a>(self)</dt><dd><tt>Remove&nbsp;this&nbsp;route&nbsp;from&nbsp;the&nbsp;routing&nbsp;tables.</tt></dd></dl>
+
+<dl><dt><a name="Route-init_from_line"><strong>init_from_line</strong></a>(self, line)</dt><dd><tt>init&nbsp;from&nbsp;a&nbsp;line&nbsp;from&nbsp;route&nbsp;-n,&nbsp;such&nbsp;as:<br>
+192.168.1.0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;255.255.255.0&nbsp;&nbsp;&nbsp;U&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0&nbsp;0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0&nbsp;eth0<br>
+default&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;192.168.1.1&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.0.0.0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;UG&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0&nbsp;0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0&nbsp;wlan0</tt></dd></dl>
+
+<hr>
+Static methods defined here:<br>
+<dl><dt><a name="Route-read_route_table"><strong>read_route_table</strong></a>()</dt><dd><tt>Read&nbsp;the&nbsp;system&nbsp;routing&nbsp;table,&nbsp;returning&nbsp;a&nbsp;list&nbsp;of&nbsp;Routes.</tt></dd></dl>
+
+</td></tr></table></td></tr></table><p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#eeaa77">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Functions</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#eeaa77"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><dl><dt><a name="-get_accesspoints"><strong>get_accesspoints</strong></a>()</dt><dd><tt>Return&nbsp;a&nbsp;list&nbsp;of&nbsp;visible&nbsp;wireless&nbsp;accesspoints.</tt></dd></dl>
+ <dl><dt><a name="-get_interfaces"><strong>get_interfaces</strong></a>(only_up<font color="#909090">=False</font>)</dt><dd><tt>Returns&nbsp;a&nbsp;list&nbsp;of&nbsp;NetInterfaces&nbsp;for&nbsp;all&nbsp;eth*,&nbsp;wlan*&nbsp;or&nbsp;mlan*<br>
+interfaces&nbsp;visible&nbsp;from&nbsp;ifconfig.<br>
+Omit&nbsp;lo,&nbsp;vpn,&nbsp;ipv6&nbsp;and&nbsp;other&nbsp;non-physical&nbsp;interfaces.<br>
+If&nbsp;only_up&nbsp;is&nbsp;true,&nbsp;use&nbsp;ifconfig&nbsp;instead&nbsp;if&nbsp;ifconfig&nbsp;-a.</tt></dd></dl>
+ <dl><dt><a name="-get_wireless_interfaces"><strong>get_wireless_interfaces</strong></a>()</dt><dd><tt>Returns&nbsp;a&nbsp;list&nbsp;of&nbsp;wireless&nbsp;interfaces&nbsp;available.</tt></dd></dl>
+ <dl><dt><a name="-ifdown_all"><strong>ifdown_all</strong></a>()</dt><dd><tt>Take&nbsp;all&nbsp;current&nbsp;interfaces&nbsp;down.</tt></dd></dl>
+ <dl><dt><a name="-kill_by_name"><strong>kill_by_name</strong></a>(namelist)</dt><dd><tt>Kills&nbsp;all&nbsp;running&nbsp;processes&nbsp;that&nbsp;start&nbsp;with&nbsp;any&nbsp;of&nbsp;the<br>
+strings&nbsp;in&nbsp;the&nbsp;given&nbsp;name&nbsp;list.</tt></dd></dl>
+</td></tr></table>
+</body></html>
