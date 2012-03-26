@@ -5,24 +5,11 @@
 # ... share and enjoy under the GPLv2 or (at your option) later.
 
 """netutils: a set of networking utilities for Python.
-Copyright 2010, 2011 by Akkana Peck <akkana@shallowsky.com>
+Copyright 2010 by Akkana Peck <akkana@shallowsky.com>
  ... share and enjoy under the GPLv2 or (at your option) later.
 
-Provides the following:
-
-Classes:
-  NetInterface: name, ip, broadcast, netmask, essid, encryption, wireless
-  AccessPoint : address, essid, encryption, quality, interface
-  Route : display or change network routing tables.
-
-Functions outside of classes:
-  get_interfaces(only_up=False): returns a list of all NetInterface.
-    If only_up, will only return the ones currently marked UP.
-  get_wireless_interfaces(): returns a list of wireless NetInterface.
-  get_accesspoints(): returns a list of visible AccessPoints.
-  ifdown_all(): take all interfaces down, killing any wpa_supplicant or dhcp
-  kill_by_name(namelist): Kill a any running processes that include any
-    of the names in namelist. Return a list of actual process names killed.
+Provides classes and functions to allow finding a wireless interface,
+querying for accesspoints, or establishing a connection.
 """
 
 import os, subprocess, re, shutil
@@ -73,6 +60,9 @@ class NetInterface :
 
 
 class Connection :
+    """Make a connection. Subclass this with details of how the
+       connection will actually be made.
+    """
     def __init__(self, iface=None) :
         if iface :
             self.iface = iface
@@ -82,6 +72,11 @@ class Connection :
         self.essid = "unknown"
 
 class ManualConnection(Connection) :
+    """Make a connection by calling explicit programs like ifconfig,
+       iwconfig, wpasupplicant, etc. In theory should work on any
+       Linux machine, but some distros (especially Debian derivatives)
+       may not work well and may need their own connection type.
+    """
     def __init__(self, iface=None):
         Connection.__init__(self, iface)
   
@@ -128,6 +123,9 @@ class ManualConnection(Connection) :
         self.essid = None
 
 class DebianConnection(Connection) :
+    """Make a connection on a Debian system, using /etc/network/interfaces
+       and service network restart (along with other helpers).
+    """
     def __init__(self, iface=None) :
         Connection.__init__(self, iface)
         self.interfaces = "/etc/network/interfaces"
@@ -196,7 +194,7 @@ wireless-essid %s
         self.essid = "unknown"
 
 class AccessPoint :
-    """ One Cell or AccessPoint from iwlist output"""
+    """ One Cell or wireless access point from iwlist output"""
 
     def __init__(self) :
         self.clear()
@@ -332,17 +330,28 @@ def get_interfaces(only_up=False, name=None) :
         if line[0] != ' ' :
             # It's a new interface. Should have a line like:
             # eth0      Link encap:Ethernet  HWaddr 00:01:4A:98:F1:51
+            # or else a line line:
+            # flags=4098<BROADCAST,MULTICAST>
+            # with no LOOPBACK flag.
             # We only want the encap:Ethernet lines, not others like
             # loopback, vpn, ipv6 etc.
-            if words[2] == 'encap:Ethernet' :
+            if words[2] == 'encap:Ethernet' or \
+                    words[1].startswith('flags') and not 'LOOPBACK' in words[1]:
+		if words[0].endswith(':') :
+		    words[0] = words[0][0:-1]
                 cur_iface = NetInterface(words[0])
                 ifaces.append(cur_iface)
+
+                if words[2].startswith('flags') :  # new format
+                    cur_iface.up = ('UP' in words[2])
+                        
             else :
                 cur_iface = None
         else :
             if not cur_iface :
                 continue
             if words[0] == 'inet' :
+                # Old format:
                 # inet addr:192.168.1.6  Bcast:192.168.1.255  Mask:255.255.255.0
                 match = re.search('addr:(\d+\.\d+\.\d+\.\d+)', line)
                 if match :
@@ -353,29 +362,36 @@ def get_interfaces(only_up=False, name=None) :
                 match = re.search('Mask:(\d+\.\d+\.\d+\.\d+)', line)
                 if match :
                     cur_iface.netmask = match.group(1)
+                # New format:
+                # inet 127.0.0.1  netmask 255.0.0.0
+                match = re.search('inet (\d+\.\d+\.\d+\.\d+)', line)
+                if match :
+                    cur_iface.ip = match.group(1)
+                match = re.search('netmask (\d+\.\d+\.\d+\.\d+)', line)
+                if match :
+                    cur_iface.netmask = match.group(1)
+                match = re.search('ether (..:..:..:..:..:..)', line)
+                if match :
+                    cur_iface.mac = match.group(1)
             elif words[0] == 'UP' :
                 cur_iface.up = True
 
     # Now we have the list of all interfaces. Find out which are wireless:
     proc = subprocess.Popen('iwconfig', shell=False,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    # TEMPORARY, FOR TESTING ON DESKTOPS:
-    #proc = subprocess.Popen('cat /home/akkana/iwconfig.out', shell=True,
-    #                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout_str = proc.communicate()[0]
     stdout_list = stdout_str.split('\n')
     cur_iface = None
     for line in stdout_list :
-        # print "line", line
         if len(line) == 0 :
             continue
         if line[0] != ' ' :
             words = line.split()
-            # print "New interface", words[0]
+            #print "Wireless interface", words[0]
             for iface in ifaces :
-                # print "Checking", words[0], "against", iface.name
+                #print "Checking", words[0], "against", iface.name
                 if iface.name == words[0] :
-                    # print "It's in the list"
+                    #print "It's in the list"
                     cur_iface = iface
                     cur_iface.wireless = True
                     match = re.search('ESSID:"(.*)"', line)
@@ -590,6 +606,10 @@ def kill_by_name(namelist) :
 
 # main
 if __name__ == "__main__" :
+    print "All interfaces:"
     for iface in get_interfaces() :
+        print iface
+    print "Wireless interfaces:"
+    for iface in get_wireless_interfaces() :
         print iface
 

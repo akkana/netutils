@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 #
-# Copyright 2010 by Akkana Peck akkana@shallowsky.com
+# Network scheme-setting tool, version 1.4.
+# Copyright 2010-2012 by Akkana Peck akkana@shallowsky.com
 # ... share and enjoy under the GPLv2 or (at your option) later.
 #
 
@@ -93,7 +94,7 @@ class NetScheme :
         return s
 
     def dump(self, filename=None) :
-        print "dump(", filename, ")"
+        print 'dump(', filename, ')'
         if filename == None :
             filename = homedirfile(".netscheme")
             print "Appending new scheme to", filename
@@ -111,6 +112,7 @@ class NetScheme :
             up_ifaces = netutils.get_interfaces(True)
             for i in up_ifaces :
                 print "Taking", i, "down with ifdown"
+                i.ifconfig_down()
                 subprocess.call(["ifdown", i.name])
 
         if add :
@@ -143,7 +145,6 @@ auto %s""" % (iface.name)
 
         print "Encryption:", self.encryption
         if self.encryption == "wpa" or self.encryption == "wpa2" :
-            print "It's WPA"
             if self.essid :
                 print >>fp, "wpa-ssid", self.essid
             if self.key :
@@ -186,8 +187,8 @@ auto %s""" % (iface.name)
             if self.essid :
                 iwargs.append("essid")
                 iwargs.append(self.essid)
-            #iwargs.append("mode")
-            #iwargs.append("managed")
+            iwargs.append("mode")
+            iwargs.append("managed")
             if accesspoint and accesspoint.address :
                 iwargs.append("ap")
                 iwargs.append(accesspoint.address)
@@ -197,10 +198,15 @@ auto %s""" % (iface.name)
             else :
                 iwargs.append("key")
                 iwargs.append("off")
-                iwargs.append("enc")
-                iwargs.append("off")
+                #iwargs.append("enc")
+                #iwargs.append("off")
+                iwargs.append("channel")
+                iwargs.append("auto")
             print "Calling", iwargs
             subprocess.call(iwargs)
+
+            print "Called iwconfig: now it says"
+            os.system("iwconfig")
 
         elif self.encryption == "wpa" :
             tempfp = tempfile.NamedTemporaryFile(prefix="wpasup",
@@ -215,19 +221,22 @@ key_mgmt=WPA-PSK
 psk="%s"
 }""" % (self.essid, self.key)
             tempfp.close()
-            print "Starting wpa_supplicant"
             subprocess.Popen(["wpa_supplicant", "wpa_supplicant",
                               "-Dwext", "-i", iface.name, "-c", tempname])
             # Is 1 second long enough for wpa_supplicant to open the file?
             # 2 might be safer. What a drag.
             time.sleep(2)
-            print "removing tmp file"
             os.unlink(tempname)
 
         if self.dhcp :
             print "Getting dhcp"
-            subprocess.call(["dhcpcd", "-G", "-C", "resolv.conf", iface.name])
-            #subprocess.call(["dhclient", "-v", iface.name])
+            try :
+                subprocess.check_call(["dhcpcd", "-G", "-C", "resolv.conf",
+                                       iface.name])
+                #subprocess.call(["dhclient", "-v", iface.name])
+            except subprocess.CalledProcessError, e :
+              print "DHCP failed, error", e.returncode
+              iface.ifconfig_down()
 
         else :
             if not self.ip :
@@ -256,6 +265,7 @@ psk="%s"
         # find the first wireless interface
         for i in all :
             print "Trying interface", i.name
+            if i.wireless: print i.name, "is wireless"
             # The clause from hell. What this does is:
             # - If the scheme has an encryption setting (including "open")
             #   then it's a wireless scheme and needs a wireless interface.
@@ -307,8 +317,17 @@ psk="%s"
         # Mark the interface up (and call ifup too, if applicable)
         subprocess.call(["ifconfig", iface.name, "up"])
 
+        # This somehow ends up being the second time it's called.
+        # So don't do that!
         if is_deb :
-            subprocess.call(["ifup", iface.name])
+            # At one point I thought it was a good idea to call ifup
+            # explicitly. But at least with some cards, ifup associates
+            # with the accesspoint and calls DHCP -- all of which is
+            # about to be done again from service networking restart.
+            # And calling it the second time can fail (e.g. for Broadcom
+            # BCM4313 where the driver needs to be reloaded before
+            # each association).
+            #subprocess.call(["ifup", iface.name])
             subprocess.call(["service", "networking", "restart"])
 
         # Try to make the routing tables sane:
@@ -323,7 +342,6 @@ psk="%s"
                 if r.dest == 'default' or r.dest == '0.0.0.0' :
                     defaults.append(r)
                     print "Default route:", r
-            print "============"
             if len(defaults) > 1 :
                 wired_route = None
                 # Find the first wired route
@@ -415,6 +433,10 @@ def find_and_set_scheme(newscheme, add=False) :
         scheme.set_scheme(add)
         return
 
+    # XXX TO DO: use python soundex module if available
+    # to see if there's a similarly named scheme --
+    # for instance, "Coffee Bean" instead of "coffeebean".
+
     print "No scheme named", newscheme
 
     aplist = netutils.get_accesspoints()
@@ -434,6 +456,8 @@ def find_and_set_scheme(newscheme, add=False) :
             ans = raw_input("Save this scheme for later? (y/N) ")
             if ans == 'y' or ans == 'Y' :
                 scheme.dump()
+
+            return
 
 #
 # A couple of default schemes:
@@ -472,9 +496,9 @@ if __name__ == "__main__" :
                           default=False,
                           help="Reset the connection without changing scheme")
         parser.add_option("-m", "--multi",
-                          action="store_true", dest="add",
+                          action="store_true", dest="multi",
                           default=False,
-                          help="Add a new interface without bringing down current one")
+                          help="Multiple interfaces: add a new interface without bringing down current one")
         parser.add_option("-s", "--save",
                           action="store_true", dest="save_new_scheme",
                           default=False,
@@ -511,6 +535,7 @@ if __name__ == "__main__" :
             newscheme.interface = config.get(scheme, 'interface')
             Schemes.append(newscheme)
 
+        # Schemes are read, options are read, time to do stuff.
         if (options.list_schemes) :
             list_schemes()
         elif (options.list_accesspoints) :
@@ -521,6 +546,6 @@ if __name__ == "__main__" :
             #print parser.usage
             print_current_scheme()
         else :
-            find_and_set_scheme(args[0], options.add)
+            find_and_set_scheme(args[0], options.multi)
     except KeyboardInterrupt :
         print "Interrupt"

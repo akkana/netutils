@@ -1,33 +1,20 @@
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
-<html><head><title>Python: module netutils-1.3</title>
+<html><head><title>Python: module netutils</title>
 </head><body bgcolor="#f0f0f8">
 
 <table width="100%" cellspacing=0 cellpadding=2 border=0 summary="heading">
 <tr bgcolor="#7799ee">
 <td valign=bottom>&nbsp;<br>
-<font color="#ffffff" face="helvetica, arial">&nbsp;<br><big><big><strong><a href="netutils-1.html"><font color="#ffffff">netutils-1</font></a>.3</strong></big></big></font></td
+<font color="#ffffff" face="helvetica, arial">&nbsp;<br><big><big><strong>netutils</strong></big></big></font></td
 ><td align=right valign=bottom
-><font color="#ffffff" face="helvetica, arial"><a href=".">index</a><br><a href="file:/home/akkana/web/software/netscheme/netutils-1.3.py">/home/akkana/web/software/netscheme/netutils-1.3.py</a></font></td></tr></table>
+><font color="#ffffff" face="helvetica, arial"><a href=".">index</a><br><a href="file:/home/akkana/bin/netutils.py">/home/akkana/bin/netutils.py</a></font></td></tr></table>
     <p><tt>netutils:&nbsp;a&nbsp;set&nbsp;of&nbsp;networking&nbsp;utilities&nbsp;for&nbsp;Python.<br>
 Copyright&nbsp;2010&nbsp;by&nbsp;Akkana&nbsp;Peck&nbsp;&lt;akkana@shallowsky.com&gt;<br>
 &nbsp;...&nbsp;share&nbsp;and&nbsp;enjoy&nbsp;under&nbsp;the&nbsp;GPLv2&nbsp;or&nbsp;(at&nbsp;your&nbsp;option)&nbsp;later.<br>
 &nbsp;<br>
-Provides&nbsp;the&nbsp;following:<br>
-&nbsp;<br>
-Classes:<br>
-&nbsp;&nbsp;<a href="#NetInterface">NetInterface</a>:&nbsp;name,&nbsp;ip,&nbsp;broadcast,&nbsp;netmask,&nbsp;essid,&nbsp;encryption,&nbsp;wireless<br>
-&nbsp;&nbsp;<a href="#AccessPoint">AccessPoint</a>&nbsp;:&nbsp;address,&nbsp;essid,&nbsp;encryption,&nbsp;quality,&nbsp;interface<br>
-&nbsp;&nbsp;<a href="#Route">Route</a>&nbsp;:&nbsp;display&nbsp;or&nbsp;change&nbsp;network&nbsp;routing&nbsp;tables.<br>
-&nbsp;<br>
-Functions&nbsp;outside&nbsp;of&nbsp;classes:<br>
-&nbsp;&nbsp;<a href="#-get_interfaces">get_interfaces</a>(only_up=False):&nbsp;returns&nbsp;a&nbsp;list&nbsp;of&nbsp;all&nbsp;<a href="#NetInterface">NetInterface</a>.<br>
-&nbsp;&nbsp;&nbsp;&nbsp;If&nbsp;only_up,&nbsp;will&nbsp;only&nbsp;return&nbsp;the&nbsp;ones&nbsp;currently&nbsp;marked&nbsp;UP.<br>
-&nbsp;&nbsp;<a href="#-get_wireless_interfaces">get_wireless_interfaces</a>():&nbsp;returns&nbsp;a&nbsp;list&nbsp;of&nbsp;wireless&nbsp;<a href="#NetInterface">NetInterface</a>.<br>
-&nbsp;&nbsp;<a href="#-get_accesspoints">get_accesspoints</a>():&nbsp;returns&nbsp;a&nbsp;list&nbsp;of&nbsp;visible&nbsp;AccessPoints.<br>
-&nbsp;&nbsp;<a href="#-ifdown_all">ifdown_all</a>():&nbsp;take&nbsp;all&nbsp;interfaces&nbsp;down,&nbsp;killing&nbsp;any&nbsp;wpa_supplicant&nbsp;or&nbsp;dhcp<br>
-&nbsp;&nbsp;<a href="#-kill_by_name">kill_by_name</a>(namelist):&nbsp;Kill&nbsp;a&nbsp;any&nbsp;running&nbsp;processes&nbsp;that&nbsp;include&nbsp;any<br>
-&nbsp;&nbsp;&nbsp;&nbsp;of&nbsp;the&nbsp;names&nbsp;in&nbsp;namelist.&nbsp;Return&nbsp;a&nbsp;list&nbsp;of&nbsp;actual&nbsp;process&nbsp;names&nbsp;killed.</tt></p>
+Provides&nbsp;classes&nbsp;and&nbsp;functions&nbsp;to&nbsp;allow&nbsp;finding&nbsp;a&nbsp;wireless&nbsp;interface,<br>
+querying&nbsp;for&nbsp;accesspoints,&nbsp;or&nbsp;establishing&nbsp;a&nbsp;connection.</tt></p>
 <p>
 <table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
 <tr bgcolor="#aa55cc">
@@ -47,16 +34,16 @@ Functions&nbsp;outside&nbsp;of&nbsp;classes:<br>
     
 <tr><td bgcolor="#ee77aa"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
 <td width="100%"><dl>
-<dt><font face="helvetica, arial"><a href="netutils-1.3.html#AccessPoint">AccessPoint</a>
-</font></dt><dt><font face="helvetica, arial"><a href="netutils-1.3.html#Connection">Connection</a>
+<dt><font face="helvetica, arial"><a href="netutils.html#AccessPoint">AccessPoint</a>
+</font></dt><dt><font face="helvetica, arial"><a href="netutils.html#Connection">Connection</a>
 </font></dt><dd>
 <dl>
-<dt><font face="helvetica, arial"><a href="netutils-1.3.html#DebianConnection">DebianConnection</a>
-</font></dt><dt><font face="helvetica, arial"><a href="netutils-1.3.html#ManualConnection">ManualConnection</a>
+<dt><font face="helvetica, arial"><a href="netutils.html#DebianConnection">DebianConnection</a>
+</font></dt><dt><font face="helvetica, arial"><a href="netutils.html#ManualConnection">ManualConnection</a>
 </font></dt></dl>
 </dd>
-<dt><font face="helvetica, arial"><a href="netutils-1.3.html#NetInterface">NetInterface</a>
-</font></dt><dt><font face="helvetica, arial"><a href="netutils-1.3.html#Route">Route</a>
+<dt><font face="helvetica, arial"><a href="netutils.html#NetInterface">NetInterface</a>
+</font></dt><dt><font face="helvetica, arial"><a href="netutils.html#Route">Route</a>
 </font></dt></dl>
  <p>
 <table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
@@ -65,7 +52,7 @@ Functions&nbsp;outside&nbsp;of&nbsp;classes:<br>
 <font color="#000000" face="helvetica, arial"><a name="AccessPoint">class <strong>AccessPoint</strong></a></font></td></tr>
     
 <tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
-<td colspan=2><tt>One&nbsp;Cell&nbsp;or&nbsp;<a href="#AccessPoint">AccessPoint</a>&nbsp;from&nbsp;iwlist&nbsp;output<br>&nbsp;</tt></td></tr>
+<td colspan=2><tt>One&nbsp;Cell&nbsp;or&nbsp;wireless&nbsp;access&nbsp;point&nbsp;from&nbsp;iwlist&nbsp;output<br>&nbsp;</tt></td></tr>
 <tr><td>&nbsp;</td>
 <td width="100%">Methods defined here:<br>
 <dl><dt><a name="AccessPoint-__init__"><strong>__init__</strong></a>(self)</dt></dl>
@@ -78,7 +65,10 @@ Functions&nbsp;outside&nbsp;of&nbsp;classes:<br>
 <td colspan=3 valign=bottom>&nbsp;<br>
 <font color="#000000" face="helvetica, arial"><a name="Connection">class <strong>Connection</strong></a></font></td></tr>
     
-<tr><td bgcolor="#ffc8d8"><tt>&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt>Make&nbsp;a&nbsp;connection.&nbsp;Subclass&nbsp;this&nbsp;with&nbsp;details&nbsp;of&nbsp;how&nbsp;the<br>
+connection&nbsp;will&nbsp;actually&nbsp;be&nbsp;made.<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
 <td width="100%">Methods defined here:<br>
 <dl><dt><a name="Connection-__init__"><strong>__init__</strong></a>(self, iface<font color="#909090">=None</font>)</dt></dl>
 
@@ -86,9 +76,12 @@ Functions&nbsp;outside&nbsp;of&nbsp;classes:<br>
 <table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
 <tr bgcolor="#ffc8d8">
 <td colspan=3 valign=bottom>&nbsp;<br>
-<font color="#000000" face="helvetica, arial"><a name="DebianConnection">class <strong>DebianConnection</strong></a>(<a href="netutils-1.3.html#Connection">Connection</a>)</font></td></tr>
+<font color="#000000" face="helvetica, arial"><a name="DebianConnection">class <strong>DebianConnection</strong></a>(<a href="netutils.html#Connection">Connection</a>)</font></td></tr>
     
-<tr><td bgcolor="#ffc8d8"><tt>&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt>Make&nbsp;a&nbsp;connection&nbsp;on&nbsp;a&nbsp;Debian&nbsp;system,&nbsp;using&nbsp;/etc/network/interfaces<br>
+and&nbsp;service&nbsp;network&nbsp;restart&nbsp;(along&nbsp;with&nbsp;other&nbsp;helpers).<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
 <td width="100%">Methods defined here:<br>
 <dl><dt><a name="DebianConnection-__init__"><strong>__init__</strong></a>(self, iface<font color="#909090">=None</font>)</dt></dl>
 
@@ -101,9 +94,14 @@ Pass&nbsp;essid=None&nbsp;to&nbsp;de-associate&nbsp;the&nbsp;interface&nbsp;from
 <table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
 <tr bgcolor="#ffc8d8">
 <td colspan=3 valign=bottom>&nbsp;<br>
-<font color="#000000" face="helvetica, arial"><a name="ManualConnection">class <strong>ManualConnection</strong></a>(<a href="netutils-1.3.html#Connection">Connection</a>)</font></td></tr>
+<font color="#000000" face="helvetica, arial"><a name="ManualConnection">class <strong>ManualConnection</strong></a>(<a href="netutils.html#Connection">Connection</a>)</font></td></tr>
     
-<tr><td bgcolor="#ffc8d8"><tt>&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt>Make&nbsp;a&nbsp;connection&nbsp;by&nbsp;calling&nbsp;explicit&nbsp;programs&nbsp;like&nbsp;ifconfig,<br>
+iwconfig,&nbsp;wpasupplicant,&nbsp;etc.&nbsp;In&nbsp;theory&nbsp;should&nbsp;work&nbsp;on&nbsp;any<br>
+Linux&nbsp;machine,&nbsp;but&nbsp;some&nbsp;distros&nbsp;(especially&nbsp;Debian&nbsp;derivatives)<br>
+may&nbsp;not&nbsp;work&nbsp;well&nbsp;and&nbsp;may&nbsp;need&nbsp;their&nbsp;own&nbsp;connection&nbsp;type.<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
 <td width="100%">Methods defined here:<br>
 <dl><dt><a name="ManualConnection-__init__"><strong>__init__</strong></a>(self, iface<font color="#909090">=None</font>)</dt></dl>
 
@@ -179,12 +177,5 @@ If&nbsp;name&nbsp;is&nbsp;specified,&nbsp;return&nbsp;only&nbsp;the&nbsp;first&n
  <dl><dt><a name="-ifdown_all"><strong>ifdown_all</strong></a>()</dt><dd><tt>Take&nbsp;all&nbsp;current&nbsp;interfaces&nbsp;down.</tt></dd></dl>
  <dl><dt><a name="-kill_by_name"><strong>kill_by_name</strong></a>(namelist)</dt><dd><tt>Kills&nbsp;all&nbsp;running&nbsp;processes&nbsp;that&nbsp;start&nbsp;with&nbsp;any&nbsp;of&nbsp;the<br>
 strings&nbsp;in&nbsp;the&nbsp;given&nbsp;name&nbsp;list.</tt></dd></dl>
-</td></tr></table><p>
-<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
-<tr bgcolor="#55aa55">
-<td colspan=3 valign=bottom>&nbsp;<br>
-<font color="#ffffff" face="helvetica, arial"><big><strong>Data</strong></big></font></td></tr>
-    
-<tr><td bgcolor="#55aa55"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
-<td width="100%"><strong>__warningregistry__</strong> = {("Parent module 'netutils-1' not found while handling absolute import", &lt;type 'exceptions.RuntimeWarning'&gt;, 28): True}</td></tr></table>
+</td></tr></table>
 </body></html>
