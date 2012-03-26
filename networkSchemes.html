@@ -6,509 +6,332 @@
   <title>network schemes howto</title>
   <meta content="Akkana Peck" name="author">
   <style type="text/css">
-  pre { color: rgb(153, 0, 0); }
+  pre,code { color: rgb(153, 0, 0); }
   .cmd { color: rgb(153, 0, 0); font-weight: bold }
   </style>
 </head>
-<body style="color: rgb(0, 0, 0); background-color: rgb(255, 255, 255);"
- alink="#000099" link="#000099" vlink="#990099">
+<body bgcolor="white" alink="#000099" link="#000099" vlink="#990099">
 <img alt="[tux networking]" src="../images/logos/tuxnetwork.jpg"
  align="right" height="187" width="256">
-<h1>Howto Set Up Multiple Network Schemes on a Linux Laptop<br>
-</h1>
-<span style="font-style: italic;"></span>Redhat Linux comes with nifty
-GUI programs such as <span style="font-style: italic;">redhat-config-network</span>
-which make it easy to configure one network.&nbsp; Debian comes with
-even better network configuration scripts, though they aren't GUI
-driven.<br>
-<br>
-Unfortunately, they aren't all that tractable on a laptop where you
-need to alternate among several different network cards (for instance,
-a
-pcmcia ethernet card, a PCMCIA wireless card, and a pcmcia modem) at
-several different locations (some of which use a fixed IP while others
-use DHCP).<br>
-<br>
-This HOWTO will discuss easy ways of setting up schemes, to make it
-very easy to move among different types of networks.&nbsp; It was
-tested primarily on Redhat 8.0 and Debian Sarge (Libranet).&nbsp;
-Things may be slightly different on other versions, so you may have to
-adjust file or directory names somewhat.<br>
-<br>
-<br>
-Debian includes a package called <i>netenv</i> which is intended to
-solve this problem. I haven't managed to get it to work on my
-laptop (it prompts me at boot time for a scheme, then proceeds to
-ignore it) but you may have better luck.
+<h1>Howto Set Up Multiple Network Schemes on a Linux Laptop</h1>
+
+<p>
+As you take your laptop from one network to the next, from home
+to work or from the coffee shop to the conference, how do you
+tell it about each new network?
+<p>
+Modern Linux systems come with nifty
+GUI programs such as <i>NetworkManager</i> -- but they have
+some drawbacks. They're sometimes tricky to use if you switch
+among several different networks, and NetworkManager in particular
+is rather heavyweight: it doesn't work unless you have a desktop
+with a panel and are running hald and all its associated daemons,
+and they can get confused if you have multiple network interfaces.
+On a laptop with modest hardware, it all seems like overkill.
+Isn't there a lighter-weight way to manage networks?
+<p>
+This HOWTO covers easy ways of setting up schemes, to make it
+very easy to move among different types of networks.
+I started developing this back around 2002 under Redhat 7.3 and 8.0,
+but the modern version (circa 2009) is based around Ubuntu/Debian
+systems and hasn't been tested on non-Debian systems.
+
+<p>
+Some years after I first wrote this, a package called <i>netenv</i>
+appeared on Debian and Ubuntu which appeared to do exactly what my
+network schemes had been doing all along (even to using some of the
+same code). Unfortunately it was missing a few important elements
+and didn't actually work.  So I've stuck to my own scripts.
+
 <h2>Contents</h2>
 <ol>
-  <li><a href="#hostname">Setting the hostname (Redhat)</a></li>
-  <li><a href="#whichtype">Cardbus or PCMCIA?<br>
-    </a></li>
-  <li><a href="#redhat">Cardbus/PCMCIA on Redhat</a></li>
-  <li><a href="#debian">Cardbus/PCMCIA on Debian</a></li>
-  <li><a href="#pcmcia">PCMCIA: an Older Approach</a></li>
-  <li><a href="#problems">Some Possible Problems</a></li>
-  <li><a href="#wireless">Wireless Networks</a></li>
-  <li><a href="#PPP__Ethernet">PPP+Local Net<br>
-    </a></li>
-  <li><a href="#todo">To Do</a><br>
-  </li>
+  <li><a href="#basics">The Basics</a></li>
+  <li><a href="#setup">Initial setup</a></li>
+  <li><a href="#newscheme">Making new schemes</a></li>
+  <ol>
+    <li><a href="#static">Static IP on eth0</a></li>
+    <li><a href="#wep">Wireless access on eth1 with an essid and a WEP key</a></li>
+    <li><a href="#wpa">Wireless with WPA -- maybe</a></li>
+    <li><a href="#hotpluggable">PCMCIA, Cardbus, USB</a>
+                                and the mysterious <i>allow-hotplug</i>
+				directive</li>
+    <li><a href="#schemenotes">Notes on scheme writing</a></li>
+  </ol>
+  <li><a href="#auto">Automatic schemes</a></li>
+  <li><a href="#resolv">Special DNS for specific schemes</a></li>
+  <li><a href="#PPP_Local">PPP + Local net</a> (for the rare folk
+                           still using a modem</li>
+
+<!-- 
+  <li><a href="#"></a></li>
+ -->
 </ol>
-<h2><a name="hostname"></a>Setting the hostname</h2>
-Redhat's installer doesn't let you specify a hostname unless you have a
-network connected at the time you install. On a laptop that needs a
-PCMCIA network card, chances are you had no network and are now stuck
-with "localhost". Yuck! No amount of fiddling with the gui network
-scripts seems to result in a hostname that shows up if you boot your
-machine without the network card. To set your hostname so that it will
-persist through reboots,
-<ol>
-  <li>Edit <i>/etc/network</i> and set your hostname (and domainname,
-if desired) there. </li>
-  <li>Edit /etc/hosts and add your desired hostname to the localhost
-line. (If you omit this step, the hostname command will print an error.)</li>
-</ol>
-<h2><a name="whichtype"></a>Network card: Cardbus or PCMCIA?</h2>
-First: it turns out that there are two different answers depending on
-whether your network card is PCMCIA (16-bit) or Cardbus (32-bit).&nbsp;
-One solution is to use pcmcia-cs' built-in scheme mechanism, but it
-doesn't work for cardbus, because the /etc/pcmcia scripts aren't called
-at all for cardbus cards.&nbsp; It also presumably&nbsp; isn't useful
-for laptops with built-in networking, because there aren't any PCMCIA
-insertion events.&nbsp; (Perhaps there's a way to force this to happen
-... let me know if you find out!)&nbsp; So I'll start out describing
-the
-cardbus mechanism, but later I'll describe the PCMCIA scheme mechanism
-since it may be useful to someone.<br>
-<br>
-If you're using neither Cardbus nor PCMCIA, but are reading this for
-use with a laptop with integrated networking, or a desktop machine
-which gets moved between networks, you can skip the PCMCIA/Cardbus
-sections.&nbsp; You may want to check out <a
- href="http://www.red-bean.com/%7Ebos/">netplug</a>, or <a
- href="http://www.stud.uni-hamburg.de/users/lennart/projects/ifplugd/">ifplugd</a>,
-or <a href="http://netenv.sourceforge.net/netenv-en.html">Netenv</a>,
-in order to autodetect when you plug in your network cable, and
-automatically run <span style="font-style: italic;">ifup</span> for
-you.&nbsp; Apparently most but not all cards support this now.<br>
-<h2>Cardbus Cards (should also work with PCMCIA)<br>
-</h2>
-<h3><a name="redhat"></a>First: On Redhat<br>
-</h3>
-Cardbus cards are handled by the hotplug mechanism, rather than the
-PCMCIA mechanism.&nbsp; Curiously, this is the mechanism that Redhat
-uses for its networking anyway, so you'd think you'd be all set,
-right?&nbsp; Not so -- not if you want to use multiple schemes. <br>
-<br>
-If you've already set up a network interface using the gui tools, you
-may want to remove it (the simple way), but if not, you need to disable
-it, using the same ifupXXX mechanism described above.&nbsp; We'll be
-using /sbin/ifup, but not from there.&nbsp; Don't worry about the
-/etc/pcmcia changes; we won't be needing them. If this is a new install
-and you haven't set up any networking yet, you can skip this part.<br>
-<br>
-<span style="font-style: italic;">New!&nbsp; I recently discovered a
-nifty automatic scheme which works much better (at least on Redhat 8)
-than my previous manual scheme.&nbsp; If you've been to this document
-in
-the past, check this out!<br>
-<br>
-</span>When Redhat sets up a network interface (assuming it's the only
-interface on the machine), it looks for a file called
-/etc/sysconfig/network-scripts/ifcfg-eth0, and uses the values in that
-script.&nbsp; So if you can get that file to point to the right place
-for wherever you are, you're done and Redhat will do the rest of the
-work for you.<br>
-<br>
-First, you have to make the files with the values you need.&nbsp; I put
-the files in <span style="font-style: italic;">/etc/sysconfig/networking/default/ifcfg-schemename</span>,
-because that's where the ifup command looks; if my ifcfg-home script
-lives there, then if I ever need to configure networking manually, I
-can
-say <span style="font-style: italic;">ifup home</span>.&nbsp; Note
-that <span style="font-style: italic;">/etc/sysconfig/networking/default</span>
-doesn't exist on a standard Redhat system, so I had to create it:<br>
-<pre>&nbsp; mkdir /etc/sysconfig/networking/default</pre>
-Then, if you have an existing configuration, copy it there, naming it
-according to the scheme you want it to represent, so to make a scheme
-called "home":
-<pre>&nbsp; cp /etc/sysconfig/network-scripts/ifcfg-eth0 /etc/sysconfig/networking/default/ifcfg-home</pre>
-or if you don't have an existing configuration, just make a new file by
-that name, which should look something like this.&nbsp; There's some
-documentation on this format (but not enough) in <span
- style="font-style: italic;">/usr/share/doc/initscripts-*/sysconfig.txt</span>.<br>
-<pre>TYPE=Ethernet<br>DEVICE=eth0<br>HWADDR=nn:nn:nn:nn:nn:nn<br>BOOTPROTO=dhcp<br>DHCP_HOSTNAME=myhost</pre>
-&nbsp;- or -<br>
-<pre>TYPE=Ethernet<br>DEVICE=eth0<br>HWADDR=nn:nn:nn:nn:nn:nn<br>BOOTPROTO=static<br>HOSTNAME=myhost<br>IPADDR=nnn.nn.nn.nn<br>BROADCAST=nnn.nn.nn.nn<br>GATEWAY=nnn.nn.nn.nn<br>PEERDNS=yes<br>DOMAIN=mydomain.com<br>DNS1=nnn.nn.nn.nn<br>DNS2=nnn.nn.nn.nn</pre>
-<h4>Discussion: </h4>
-<span style="font-weight: bold;">HWADDR</span> restricts this profile
-to work only on one network card.&nbsp; Remove that line, and it will
-work on any card (wired or wireless) that you insert.&nbsp; Yay!<br>
-<span style="font-weight: bold;">PEERDNS</span> tells Redhat's script
-to modify <span style="font-style: italic;">/etc/resolv.conf</span> to
-add your MYDOMAIN and DNS1 and DNS2 servers.&nbsp; (Unfortunately it
-ignores any further entries; two servers is the most it can
-handle.)&nbsp; Omit all of these if you don't need <span
- style="font-style: italic;">resolv.conf</span> modified.&nbsp;
-However, the script is a little flaky.&nbsp; If it doesn't work for
-you, then just make your own <span style="font-style: italic;">resolv.conf</span>
-files, and swap them in as part of your <span
- style="font-style: italic;">netscheme</span> script (below).<br>
-<h4>Switching schemes</h4>
-Now you need an easy way to switch between schemes.&nbsp; Here's the
-little script I wrote to do that.&nbsp; I named it <span
- style="font-style: italic;">/usr/local/bin/netscheme</span> and run it
-as root.<br>
-<pre>#! /bin/sh<br>fnam=/etc/sysconfig/network-scripts/ifcfg-eth0<br><br>if [ $# -le 0 ]; then<br>  echo -n "Current scheme: "<br>  ls -l $fnam | sed -e 's/.*-//'<br>  exit 0<br>fi<br><br>/bin/rm $fnam<br>ln -s ../networking/default/ifcfg-$1 $fnam<br>echo Set scheme to $1<br></pre>
-Now I say <span style="font-style: italic;">netscheme home</span> or <span
- style="font-style: italic;">netscheme dhcp</span>, and the next time I
-insert the card, hotplug handles everything automagically.&nbsp; (If it
-fails to do so, try <span style="font-style: italic;">ifup schemename</span>
-or <span style="font-style: italic;">ifup eth0</span>.)<br>
-<h3><a name="debian"></a>The Debian Version</h3>
+
+<a name="basics">
+<h2>The Basics: How to use network schemes</h2>
 <p>
-Debian controls network interfaces through the file
-<i>/etc/network/interfaces</i>. There used to be a way of adding multiple
-mappings in that file (see below) but that no longer seems to work.
-Fortunately, there's a simpler and even easier way to switch
-between multiple schemes.
+Here's how my network schemes work:<br>
+You always have a net scheme which defines which network you'll
+try to connect to. For instance, you start out at home on your
+wired network, so you start with the scheme named "home".
 <p>
-Create a directory called <i>/etc/network/schemes</i>.
-Inside it, make files for each scheme you want, with names
-interfaces-<i>schemename</i>. So I might have <i>interfaces-home</i>
-and <i>interfaces-work</i>. Each of these files is a complete copy
-of what you want /etc/network/interfaces to look like in that
-location. If you need to change your DNS servers, also make a
-file called resolv.conf-<i>schemename</i> in the same directory.
-<p>
-Then make a simple script, <i>/etc/network/schemes/netscheme</i>,
-that looks like this:
+Now you carry your laptop to work and want to connect to the
+wireless network there. You have to tell your laptop to
+disable the wired network, enable the wireless one, and
+connect with the appropriate passwords. You do that by typing:
 <pre>
-#! /bin/sh
-
-if [ $# -le 0 ]; then
-  echo -n "Current scheme: "
-  cat /etc/network/schemes/current
-  exit 0
-fi
-
-newscheme=$1
-echo "Changing scheme to $newscheme"
-
-echo $newscheme >>/etc/network/schemes/current
-
-cp /etc/network/schemes/interfaces-$newscheme /etc/network/interfaces
-if [ -f /etc/network/schemes/resolv.conf-$newscheme ]; then
-  cp /etc/network/schemes/resolv.conf-$newscheme /etc/resolv.conf
-fi
+netscheme work
 </pre>
 <p>
-Finally, to make this easy, either make the script setuid root, or
-make an alias:
-<code>alias netscheme='sudo /etc/network/schemes/netscheme'</code>
-(and, if you want, include /etc/network/schemes/netscheme in the list
-of commands you're allowed to run nopassword in /etc/sudoers).
-<p>
-Now you can type <code>netscheme home</code> or whatever, and be
-all set to run with the right settings. Easy.
-
-<h2>An Older Debian Approach</h2>
-Debian used to have something called "mappings" that you could put
-in the interfaces file. But that hasn't worked for me on recent distros.
-I'm including the old instructions in case they might still be relevant
-somewhere:
-<p>
-Debian, happily, already has a network scheme setup, which is well
-described <span style="font-style: italic;">in <a
- href="http://lists.debian.org/debian-powerpc/2001/debian-powerpc-200108/msg00505.html">this
-mailing list posting</a>.&nbsp; </span>
-<p>
-Basically, you edit
-/etc/network/interfaces, and make entries that look like this:<br>
+After work, you go to your favorite coffee shop. They have a
+wireless net too, but it's open, so using the password from work
+doesn't work there. So you type:
 <pre>
-mapping eth0
-script /etc/network/map-scheme.sh
-map home eth0-home
-map work eth0-work
-
-iface eth0-home inet static
-address nn.nn.nn.nn
-netmask nn.nn.nn.nn
-broadcast nn.nn.nn.nn
-gateway nn.nn.nn.nn
-up cp /etc/network/resolv.conf.home /etc/resolv.conf
-
-iface eth0-work inet dhcp
-hostname myhost
+netscheme cafe
 </pre>
-Now you need a little script called /etc/network/map-scheme.sh.&nbsp;
-It looks like this (this is cribbed and slightly modified from the
-mailing list posting I mentioned earlier):<br>
-<pre>
-#! /bin/sh
-iface="$1"
-if [ "$iface" = "" ]; then iface="eth0"; fi
-if [ -f /etc/network/scheme ]; then
-  scheme=$(cat /etc/network/scheme)
-  echo $iface-$scheme
-else
-  echo $iface
-fi
-exit 0
-</pre>
-But you still need an easy way to switch schemes on Debian, so I wrote
-a little <span style="font-style: italic;">/usr/local/bin/netscheme</span>
-script for Debian too (calling it <span style="font-style: italic;">netscheme</span>
-on both machines means that I don't have to remember two different sets
-of commands when I switch distros).&nbsp; Here's my Debian script:<br>
-<pre>#! /bin/sh<br>if [ $# -le 0 ]; then<br>  echo -n "Current scheme: "<br>  cat /etc/network/scheme<br>  exit 0<br>fi<br>echo "$1" &gt; /etc/network/scheme<br></pre>
-Now I can say <span style="font-style: italic;">netscheme home</span>
-or <span style="font-style: italic;">netscheme dhcp</span> to change
-the
-scheme when I change locations, just like on Redhat.<br>
-<br>
-But wait!&nbsp; Debian needs one more thing.&nbsp; <span
- style="font-style: italic;">/etc/network/interfaces</span> can't
-handle
-DNS, so you won't be able to resolve any external names.&nbsp; For
-DHCP,
-this isn't a problem (the DHCP script should generate one based on
-information from the server) but for static schemes you need your own
-resolv.conf.&nbsp; To handle this, I make copies of all the resolv.conf
-files I might need (see <span style="font-style: italic;">man
-resolv.conf</span> for more info, or, easier, just copy one from any
-machine on your network) and stick it in
-/etc/network/resolv.conf.schemename.&nbsp; Then I add one more line to
-my static scheme, which looks like this:<br>
-<pre>&nbsp; up cp /etc/network/resolv.conf.home /etc/resolv.conf</pre>
-for the case of the <span style="font-style: italic;">home</span>
-scheme.<br>
-<h4>Making Debian hotplug handle cardbus cards</h4>
-Debian doesn't automatically handle my cardbus ethernet card via
-hotplug like Redhat does.&nbsp; So even if the scheme is set, the
-network doesn't start
-automatically when I insert the card: I have to run <span
- style="font-style: italic;">ifup eth0</span> manually.&nbsp; With a
-PCMCIA card, I expect everything would happen automatically.&nbsp; But
-I figured out how to make hotplug do this automatically when the card
-is inserted, on a couple of different Debian installs.<br>
-<br>
-First, try editing /etc/hotplug/net.agent.&nbsp; Look for the line that
-says "<i>case $ACTION in</i>", then below that, find where it calls <i>exec
-/sbin/ifup $INTERFACE$LIFACE</i>.&nbsp; Remove the <i>$LIFACE</i> from
-that line, and see if your card is configured now.&nbsp; $LIFACE is the
-string "=hotplug", so it was calling <i>ifup eth0=hotplug</i>, and
-ifup apparently doesn't know how to deal with that.&nbsp; Perhaps if
-you added an "<i>eth0=hotplug</i>" line to <i>/etc/network/interfaces</i>
-in just the right way, it would work, but I haven't come up with a
-syntax that makes it happy.<br>
-<br>
-If editing net.agent doesn't work, you may have to add a script to call
-ifup.&nbsp; This is a bit of a hack, and perhaps there's a better
-way.&nbsp; First, you have to know what module your card uses.&nbsp;
-For mine,
-it's 3c59x.&nbsp; Then do the following:<br>
-<pre>mkdir /etc/hotplug/pci<br></pre>
-Create a file called <span style="font-style: italic;">/etc/hotplug/pci/3c59x</span>
-(substitute the name of your card's module). In it, put commands
-similar to this.&nbsp; ^G means a control-G, the console beep
-character: this simulates the two beeps you hear upon inserting pcmcia
-cards, though unfortunately you don't get the high-or-low beep for
-success or failure.<br>
-<pre>#! /bin/sh<br>echo "^G" &gt;/dev/console<br>/sbin/ifup eth0<br>echo "^G" &gt;/dev/console</pre>
-(Substitute eth1 if needed.)&nbsp; Make it executable:<br>
-<pre>chmod 755 /etc/hotplug/pci/3c59x</pre>
-Now the hotplug system should see your card and configure the network
-appropriately.<br>
-<h4>What if hotplug doesn't configure the card?</h4>
-<b>Hotplug debugging tips</b>:&nbsp; The files in /etc/hotplug are all
-scripts, so you can add "echo" statements to them to see where it's
-going and what it's doing.&nbsp; The catch is that you may not see
-these echoes, especially if you're in X.&nbsp; So use lines like this:<br>
-<pre>echo "Entering pci.agent" &gt;&gt;/etc/hotplug.dbg</pre>
-scattered throughout the hotplug scripts you want to debug.&nbsp; The
-&gt;&gt; makes it append to the file, so you'll be able to read that
-file as a log of what it did.&nbsp; Try adding lines like this to
-pci.agent, net.agent, and also to files in /etc/pcmcia since cardmgr
-may be stealing the event before hotplug gets it.<br>
-<h2><a name="pcmcia"></a>PCMCIA Schemes (an older approach)<br>
-</h2>
-After much goggling and fiddling, I came up with a setup that works
-nicely.&nbsp; The gist is this:<br>
-<br>
-There are two different systems called when a PCMCIA card is inserted:
-cardmgr (PCMCIA-only) and hotplug (a general system which also covers
-USB and firewire).&nbsp; Hotplug is a nice general system; but for
-networking, cardmgr has the advantage that it has a built-in scheme
-mechanism which can define multiple zones with different behaviors for
-each zone.<br>
-<br>
-<span style="font-style: italic;"></span>Redhat's native network setup,
-located mostly in <span style="font-style: italic;">/etc/sysconfig/networking</span>
-and <span style="font-style: italic;">/etc/sysconfig/network-scripts</span>,
-is called from hotplug; so Redhat disables the networking part of
-cardmgr, though the cardmgr system is still there for use with other
-types of PCMCIA cards.&nbsp; If you want schemes to work, you have to
-re-enable the cardmgr scripts and disable the hotplug ones.&nbsp; These
-steps will guide you through this:<br>
-<ol>
-  <li>Disable hotplug control of networking.&nbsp; Edit <span
- style="font-style: italic;">/etc/hotplug/net.agent</span>.&nbsp;
-Search down to where it says "<span style="font-style: italic;">RedHat
-and similar</span>" and find the line that says <br>
-    <span class="cmd">if [ -x /sbin/ifup ]; then</span><br>
-and change it to say: <br>
-    <span class="cmd">if [ -x /sbin/ifupXXX ]; then</span><br>
-Now it will skip that clause, because there's no program called <span
- style="font-style: italic;">/sbin/ifupXXX</span>.<br>
-  </li>
-  <li>Enable cardmgr control of networking.&nbsp; You can do this by
-installing the full pcmcia-cs package, but you already have most of it:
-really all you need is two files: <span style="font-style: italic;">/etc/pcmcia/network</span>
-and <span style="font-style: italic;">/etc/pcmcia/network.opts</span>.&nbsp;
-If you have a non-Redhat system handy, you can just copy those two
-files from the other system; or you can copy those files from a
-pcmcia-cs distribution.&nbsp; Either way, plunk them down in <span
- style="font-style: italic;">/etc/pcmcia</span> (you might want to copy
-the existing <span style="font-style: italic;">/etc/pcmcia/network</span>
-script somewhere safe first).</li>
-  <li>Edit <span style="font-style: italic;">/etc/pcmcia/network.opts</span>
-to customize it for your setup.&nbsp; This is the file where your
-schemes should be defined.&nbsp; The file you copied should have
-samples
-of the format.&nbsp; A DHCP scheme will probably look something like
-this:<br>
-    <pre>     INFO="Scheme for use at work"<br>     HOSTNAME="mymachine"<br>     BOOTP="n"<br>     DHCP="y"<br>     DOMAIN="mycompany.com"<br>     SEARCH="$DOMAIN myotherdomain.org"</pre>
-A domain where you're using a static IP address will set DHCP to "y"
-and add fields for IPADDR, NETMASK, BROADCAST, GATEWAY, DNS_1, DNS_2,
-and DNS_3.</li>
-  <li>Now you're ready to test your schemes.&nbsp; First, set a scheme:
-    <span style="font-style: italic;">cardctl scheme schemename</span>
-and verify
-that it set it, by typing <span style="font-style: italic;">cardctl
-scheme</span> and making sure it returns the right name.&nbsp; Now
-insert the pcmcia card, and check with <span
- style="font-style: italic;">ifconfig
--a</span> that it got the expected address.</li>
-</ol>
-<h3><a name="problems"></a>Some Possible Problems: </h3>
-<ul>
-  <li>If the card did not get the expected address, run dmesg and also
-check /var/log/messages for hints on what might have gone wrong.</li>
-  <li>I'm seeing some flakiness on Redhat 8.0 in configuring the card
-(sometimes it freezes for a while after I insert the card, and once it
-unfreezes I see messages in dmesg such as: <span
- style="font-style: italic;">cs: socket c17d2800 voltage interrogation
-timed out</span>.&nbsp; This may be a hardware problem.&nbsp;
-Re-inserting usually cures it; <span style="font-style: italic;">cardctl
-eject; cardctl insert</span> probably also would work.</li>
-</ul>
-
-<h2><a name="wireless"></a>Wireless Networks:</h2>
 <p>
-If you don't specify HWADDR, then both the Redhat and the Debian script
-should transparently work with a wi-fi card as well as a lan
-card.&nbsp;
-Hooray!<br>
-<br>
-If you want to do security, though, you'll need some additional
-work. So far, I've only
-experimented with WEP (yes, I know it's not secure, but it's probably
-better than nothing, right?)&nbsp; Here's how to do WEP, ad-hoc, DHCP
-and other fun wireless tricks.<br>
+And so on. If you go to a new place, you just make a new scheme.
 
-<h4>Debian</h4>
+<a name="setup">
+<h2>Initial setup</h2>
 <p>
-Here's a typical <i>/etc/networks/interfaces</i> setup for a
-WEP network that has both an essid and a key:
+On Debian-based systems (including derivatives like Ubuntu),
+networking is handled through a directory called
+<i>/etc/network</i>; in particular, there's a file called
+<i>/etc/network/interfaces</i> that controls how the machine will
+attempt to connect to either wired or wireless networks.
+That's where you set all sorts of values like the IP address or
+DHCP, the wireless essid and key, and so forth.
+<p>
+What we'll do is create a bunch of <i>interfaces</i> files suitable
+for different conditions, and give them appropriate names.
+<p>
+Let's start with the simplest possible interfaces file:
+a wired network, on interface <i>eth0</i>, using DHCP.
+That looks like this:
 <pre>
+# The loopback network interface
+auto lo
+iface lo inet loopback
+
+# The primary network interface
 auto eth0
-allow-hotplug eth0
 iface eth0 inet dhcp
-wireless-essid my-essid
-wireless-key my-hex-key
+</pre>
+
+<p>
+Compare that with your own <i>/etc/network/interfaces</i>. Use your
+own version for the next step if it's different from this one.
+
+<p>
+Now set up a schemes directory. I'm assuming that you have a
+currently working setup in /etc/network/interfaces and you're going
+to call this initial scheme "home".
+
+<pre>
+mkdir /etc/network/schemes
+cp /etc/network/interfaces /etc/network/schemes/interfaces-home
+</pre>
+
+<p>
+You're almost done; now all you need is the scheme-switching script.
+It's a very simple shell script which you can get here:
+<br>
+<b><a href="/software/scripts/netscheme.py">netscheme.py</a></b>
+<br>
+There's also a simpler, older shell script version, for comparison:
+<a href="netscheme">netscheme</a>.
+<br>
+Take that script and name it /etc/network/schemes/netscheme and
+be sure that it's executable:
+<pre>
+chmod 755 /etc/network/schemes/netscheme
 </pre>
 <p>
-The <i>allow-hotplug</i> line is important, otherwise modern
-udev-based kernels won't notice when you plug in the pcmcia
-card. (Sometimes they won't anyway, but you have a better chance if
-that line is there.)
+One more thing: you have to be root to run the netscheme script.
+If you use sudo, you might want to add it in the sudoers file to the
+list of programs you're allowed to run without a password.
 <p>
-Of course, you can replace the dhcp line with the lines to set a
-static IP address, while keeping the essid and key lines. Mix 'n' match.
+If you can't remember what scheme you're in,
+running <code>netscheme</code> with no scheme name will
+tell you.
 
-<h4>Older Debian</h4>
-<i>(This method no longer works reliably for me starting with Ubuntu
-Breezy: the "up", "pre-up", etc. lines are no longer executed at all
-even though the documentation says they should work.)</i>
+<a name="newscheme">
+<h2>Writing new schemes</h2>
 <p>
-After letting the card
-configure itself with a static address, I can connect if I make the
-following script and call it <span style="font-style: italic;">/etc/network/do_wep</span>:<br>
-<pre>#!/bin/sh<br>iwconfig eth0 key xxxx-xxxx-xx<br></pre>
-(or you can also say "key s:passwd").&nbsp; Then in the Debian <span
- style="font-style: italic;">interfaces</span>
-file, in the static ip section right before the up cp resolv.conf line,
-I add this line:<br>
-<pre>up sh /etc/network/do_wep<br></pre>
-That means that after configuring the static IP address information,
-the script will check whether it's a wireless card, and if it is, it
-will set the appropriate WEP key and password.<br>
-<br>
-Theoretically I should be able to put the iwconfig command directly
-into the interfaces file, but I haven't always had success doing
-that.&nbsp; Try it and see.<br>
-<br>
-If you have a network that does something tricky like set a special
-essid before it will give you your DHCP negotiation, first try putting
-these line into interfaces (you may not need the first line, depending
-on which wireless driver you use):<br>
-<pre>wireless-mode managed<br>wireless-essid whatever</pre>
-If that doesn't work, create a
-script called <span style="font-style: italic;">do_essid</span> with
-this in it:<br>
-<pre>iwconfig eth0 essid whatever</pre>
-then call it this way in <span style="font-style: italic;">interfaces</span>:<br>
-<pre>&nbsp; pre-up sh /etc/network/do_essid<br></pre>
-Some drivers, such as the hostAP Prism 1/2 driver, require an essid
-line.&nbsp; If you don't know your essid, try this:<br>
-<pre>wireless-essid ANY</pre>
-<h4>Redhat</h4>
-On Redhat, it's even easier: just add<br>
-<pre>KEY="xxxx-xxxx-xx"</pre>
-to the <span style="font-style: italic;">ifcfg-scheme</span> file,
-perhaps with a MODE=Managed if you want to be explicit about things.<br>
-<br>
-<span style="font-style: italic;">Redhat 8 warning</span>: The Redhat 8
-2.4.18 kernel uses obsolete network modules, so if you use a more
-recent kernel, the module names required by the pcmcia modules are all
-wrong (for instance, it will try to load the nonexistant <span
- style="font-style: italic;">wvlan</span> module instead of <span
- style="font-style: italic;">orinoco</span>).&nbsp; If it can't find
-the module, it bails and skips the rest of network setup, and doesn't
-even register the <span style="font-style: italic;">eth0</span>
-device, so you can't proceed with <span style="font-style: italic;">ifup
-eth0</span> by hand.&nbsp; I'm still trying to find a way around this;
-but I'm not trying very hard, since I use 2.4.21 most of the time
-anyway.&nbsp; Curiously, for only one network card, wireless worked
-just fine for me on the stock kernel, and I'm not sure what the
-difference is.<br>
-<h3>Ad-hoc Wireless Networking:</h3>
-This is so cool!&nbsp; Just add to your existing setup (<span
- style="font-weight: bold;">Redhat</span>)<br>
-<pre>ESSID=whatever<br>MODE=ad-hoc</pre>
-or make a script (<span style="font-weight: bold;">Debian</span>) <span
- style="font-style: italic;">do_adhoc</span>
-called as an <span style="font-style: italic;">up</span> post-command
-that does this:<br>
-<pre>iwconfig eth0 essid whatever<br>iwconfig eth0 mode ad-hoc</pre>
-and you're ready to network with another laptop that's set up
-similarly, with no need for a WAP or other infrastructure.&nbsp; Take
-them anywhere!<br>
-<h2><a name="PPP__Ethernet"></a><span style="font-weight: bold;">PPP
-+ Local Net</span>: </h2>
-For ages I've wanted a simple way to set up PPP and ethernet at the
+If you finished the steps in the previous section, you're all set
+with network schemes. But one network scheme isn't very useful!
+You need to make some more schemes so you can really use the system.
+<p>
+For each scheme, you need to create a file called
+<code>/etc/network/schemes/interfaces-<i>schemename</i></code>
+... don't forget the interfaces- part.
+
+<p>
+So how do you figure out what to put in the file?
+Obviously, it depends on your setup, but here are some typical
+interfaces files:
+
+<a name="static">
+<h3>Static IP on eth0</h3>
+<p>
+<pre>
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet static
+address 192.168.1.24
+netmask 255.255.255.0
+broadcast 192.168.1.255
+gateway 192.168.1.1
+</pre>
+<p>
+Obviously, change the network numbers appropriately.
+
+<a name="wep">
+<h3>Wireless access on eth1 with an essid and a WEP key</h3>
+<p>
+<pre>
+auto lo
+iface lo inet loopback
+
+auto eth1
+iface eth1 inet dhcp
+wireless-essid network name
+wireless-key 6BF278D208
+</pre>
+<p>
+If your wireless is on wlan0 instead of eth1, use that instead.
+
+<a name="wpa">
+<h3>Wireless with WPA</h3>
+<p>
+WPA used to be really complicated, but under modern Debian and
+Ubuntu systems it's gotten simple. It looks like this:
+
+<pre>
+auto lo
+iface lo inet loopback
+
+auto eth1
+iface eth1 inet dhcp
+wpa-ssid the-essid
+wpa-psk the-password
+</pre>
+
+<p>
+For the password you can just use the user-readable password --
+you don't have to convert it to a hex code.
+
+<a name="hotpluggable">
+<h3>If your network card is PCMIA, Cardbus or other hot-pluggable design</h3>
+<p>
+If your network card isn't always present on the system, you'll want
+to add this line right under the "auto" line (using eth0, eth1, wlan0
+or whatever is appropriate for the interface):
+
+<pre>
+allow-hotplug wlan0
+</pre>
+<p>
+I think this applies to USB wi-fi as well, though I've never
+actually used one.
+<p>
+There's not much documentation on what <i>allow-hotplug</i> actually
+does. <code>man interfaces</code> (a fairly good man page, BTW)
+implies that ifup will refuse to bring up an interface unless
+<i>allow-hotplug</i> is set; but if the network is being started via
+<code>/etc/init.d/networking start</code> either way, why do different
+things happen depending on whether <i>allow-hotplug</i> is present?
+It's all very confusing, but take my word for it, you need
+<i>allow-hotplug</i> if you're using PCMCIA or Cardbus (or
+probably USB).
+
+<a name="schemenotes">
+<h3>Notes on scheme writing</h3>
+<p>
+It's important to have only one real network interface (not
+including lo) specified in the interface-schemename file,
+(if you're deliberately routing from one network interface
+to the other, then you probablyknow enough to be able to ignore
+that advice safely).
+<p>
+At least on my current system (Ubuntu Hardy), if I simultaneously
+leave up both eth0 (the built-in wired networking) and eth1 (the
+built-in wireless), then routing will get horribly confused
+even if one of the two is completely disconnected.
+<p>
+The only way I've found to fix this is
+<pre>
+ifconfig eth0 up
+ifconfig eth1 down
+</pre>
+to bring one interface up and one down. You'd think
+<code>ifup</code> and <code>ifdown</code> would do it, based on
+their very vague man pages, but in fact they don't do anything
+as far as I can tell. So the <code>netscheme</code> script
+starts out by marking all interfaces down, then bringing up
+any interfaces specified in the file.
+
+<p>
+This also means that if you want a scheme that specifies no
+networking at all, just make a scheme containing only the lo entry,
+and all other interfaces will be <code>ifconfig</code>ed
+<code>down</code>.
+
+<p>
+You may have noticed that all the schemes start with the entry for lo,
+the loopback device. I could make the netscheme script put that in
+automatically, but it seems easy enough to leave it in each scheme
+so I haven't bothered.
+
+<a name="auto">
+<h2>Automatic schemes</h2>
+<p>
+Sometimes you go to a cafe or a conference that doesn't have any
+complicated key or other information, but it does require you to
+specify the essid (the name of the wireless net). netscheme has a
+special case for that: if you type
+<pre>
+netscheme essid
+</pre>
+and there's no scheme already named essid, it will ask you
+if you want to make a new scheme. If you answer anything but n,
+it will change the scheme to the name you specified.
+<p>
+It doesn't currently save that as a new scheme, but you can always
+run it again if you return to the same network.
+
+<a name="resolv">
+<h2>Special DNS for specific schemes</h2>
+<p>
+Linux specifies DNS settings in the file <i>/etc/resolv.conf</i>
+<p>
+If you use a static IP address, then you won't get DNS information
+from the DHCP server. In that case, you'll probably want to create
+a resolv.conf for your setup, and save it as 
+<code>/etc/network/schemes/resolv.conf-<i>schemename</i></code>.
+It will be copied into place every time you switch to that scheme.
+<p>
+Occasionally, you may find a network that works okay except that it
+doesn't have proper DNS information. (This is fairly common in
+wrongly-configured motel wireless networks.) 
+If you can find some DNS settings that work (hint: sometimes your
+home or work settings will work, or sometimes the network number
+with a host id of 1 will work), save it as
+<code>resolv.conf-<i>schemename</i></code>.
+
+<h2>That's it!</h2>
+<p>
+That's really all you need to know - go forth and network!
+The rest of this howto is older
+information concerning details that were important to older systems.
+
+<a name="PPP_Local"></a>
+<h2>PPP + Local Net</h2>
+<p>
+For ages I wanted a simple way to set up PPP and ethernet at the
 same time, so that on
 trips, my husband and I could share a single PPP connection between our
 two laptops.&nbsp; We finally have it, and it turns out to be fairly
@@ -548,19 +371,9 @@ lesson from linuxchix</a> which explains it much better than I would.</li>
 on the gateway machine.<br>
   </li>
 </ol>
-<h2><a name="todo"></a>To Do:</h2>
-<span style="font-style: italic;">(Other network types, plus fun things
-I'd like to investigate)<br>
-<br>
-</span><span style="font-weight: bold;">Firewire networking</span>:
-Another
-cool way of sharing a connection between laptops.&nbsp; Might be fun to
-play with some day.<br>
-<br>
-<span style="font-weight: bold;">Offline mail</span>: I've been
-investigating various approaches to offline mail, and I'm nearly ready
-to write up some of my techniques.<br>
-<hr style="width: 100%; height: 2px;"><a href="index.html">Linux Links</a><br>
+
+<hr>
+<a href="index.html">Linux Links</a><br>
 <a href="../index.html">Shallow Sky Home</a><br>
 </body>
 </html>

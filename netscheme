@@ -1,54 +1,526 @@
-#! /bin/sh
+#! /usr/bin/env python
+#
+# Copyright 2010 by Akkana Peck akkana@shallowsky.com
+# ... share and enjoy under the GPLv2 or (at your option) later.
+#
 
-if [ $# -le 0 ]; then
-  echo -n "Current scheme: "
-  cat /etc/network/schemes/current
-  exit 0
-fi
+import sys, os
+import subprocess
+import signal
+import re
+import shutil
+import tempfile
+import time
+from ConfigParser import ConfigParser
 
-newscheme=$1
-echo "Changing scheme to $newscheme"
+import netutils
 
-ifupdown() {
-  iface=$1
-  if grep -q "iface $iface" /etc/network/interfaces; then
-    ifconfig $iface up
-  else
-    ifconfig $iface down
-  fi
-}
+# Get the homedir for the user running this script.
+# Unfortunately, if it's run under sudo, ~ and $HOME may expand to root
+# rather than to the actual user. This is a configurable sudo option
+# and varies randomly among distros.
+def homedirfile(fname) :
+    sudo_user = os.getenv("SUDO_USER")
+    if sudo_user :
+        home = os.path.expanduser("~" + sudo_user)
+    else :
+        home = os.path.expanduser("~")
+    if fname :
+        return os.path.join(home, fname)
+    else :
+        return home
 
-/etc/init.d/networking stop
+class NetScheme :
+    """A network scheme, either wired or wireless.
+       encryption=None means wired;
+       wireless schemes will have encryption in ( "open", "wep", "wpa" )
+       The other arguments should be self-explanatory.
+    """
+    def __init__(self, name, dhcp=True,
+                 ip='', netmask='', broadcast='', gateway='',
+                 encryption='', essid='', key='', dns_servers='') :
+        self.name = name
+        self.essid = essid
+        self.dhcp = dhcp
+        self.ip = ip
+        self.netmask = netmask
+        self.broadcast = broadcast
+        self.gateway = gateway
+        if encryption :
+            self.encryption = encryption.lower()
+        else :
+            self.encryption = None
+        self.key = key
+        if not dns_servers or dns_servers == '' or \
+                (len(dns_servers) == 1 and dns_servers[0] == '') :
+            self.dns_servers = None
+        else :
+            self.dns_servers = dns_servers
+        self.interface = None
 
-echo $newscheme >/etc/network/schemes/current
+        # Sanity check: if there's an essid then encryption should be set
+        if self.essid and not self.encryption :
+            self.encryption = "open"
 
-if [ -f /etc/network/schemes/interfaces-$newscheme ]; then
-  cp /etc/network/schemes/interfaces-$newscheme /etc/network/interfaces
-  if [ -f /etc/network/schemes/resolv.conf-$newscheme ]; then
-    cp /etc/network/schemes/resolv.conf-$newscheme /etc/resolv.conf
-  fi
-else
-  echo -n "No scheme '$newscheme' -- create one for that essid?"
-  read ans
-  if [ x$ans = xn ]; then
-    exit 0
-  fi
-  cat >/etc/network/interfaces <<EOF1
-auto lo
-iface lo inet loopback
+    def __repr__(self) :
+        s = "[%s]\n" % (self.name)
+        if self.dhcp :
+            s += "dhcp = true\n"
+        else :
+            s += "dhcp = false\n"
+        if self.essid :
+            s += "essid = %s\n" % (self.essid)
+        if self.ip :
+            s += "ip = %s\n" % (self.ip)
+        if self.netmask :
+            s += "netmask = %s\n" % (self.netmask)
+        if self.broadcast :
+            s += "broadcast = %s\n" % (self.broadcast)
+        if self.gateway :
+            s += "gateway = %s\n" % (self.gateway)
+        if self.encryption :
+            s += "encryption = %s\n" % (self.encryption)
+        if self.key :
+            s += "key = %s\n" % (self.key)
+        if self.dns_servers :
+            s += "dns_servers = %s\n" % (self.dns_servers)
+            # XXX Probably need to print the [ list ]
+        # Don't save the interface, but the user might change it:
+        #if self.interface :
+        #    s += "interface = %s" % (self.interface)
+        s += "\n"
 
-auto eth1
-allow-hotplug eth1
-iface eth1 inet dhcp
-EOF1
-  echo "wireless-essid $newscheme" >>/etc/network/interfaces
-fi
+        return s
 
-# On a laptop with built-in wifi and wired,
-# ubuntu won't automatically disable one and enable the other.
-# So do it manually (sigh):
+    def dump(self, filename=None) :
+        print "dump(", filename, ")"
+        if filename == None :
+            filename = homedirfile(".netscheme")
+            print "Appending new scheme to", filename
+        print "Trying to append to", filename
+        fp = open(filename, "a")
+        print >>fp, self
+        fp.close()
 
-ifupdown eth0
-ifupdown eth1
+    def set_scheme_debian(self, iface, add) :
+        """Update /etc/network/interfaces with info for the current scheme"""
 
-/etc/init.d/networking start
+        if not add :
+            # First take down any currently up interfaces,
+            # or ifup will fail later
+            up_ifaces = netutils.get_interfaces(True)
+            for i in up_ifaces :
+                print "Taking", i, "down with ifdown"
+                subprocess.call(["ifdown", i.name])
+
+        if add :
+            mode = "a"
+        else :
+            mode = "w"
+        fp = open("/etc/network/interfaces", mode)
+
+        # If we're making a new /etc/network/interfaces,
+        # make sure it includes loopback:
+        if not add :
+            print >>fp, """auto lo
+iface lo inet loopback"""
+
+        # Write the entry for the new interface
+        print >>fp, """
+auto %s""" % (iface.name)
+        if self.dhcp :
+            print >>fp, "iface %s inet dhcp" % (iface.name)
+        else :
+            print >>fp, "iface %s inet static" % (iface.name)
+            if self.ip :
+                print >>fp, "address", self.ip
+            if self.netmask :
+                print >>fp, "netmask", self.netmask
+            if self.broadcast :
+                print >>fp, "broadcast", self.broadcast
+            if self.gateway :
+                print >>fp, "gateway", self.gateway
+
+        print "Encryption:", self.encryption
+        if self.encryption == "wpa" or self.encryption == "wpa2" :
+            print "It's WPA"
+            if self.essid :
+                print >>fp, "wpa-ssid", self.essid
+            if self.key :
+                print >>fp, "wpa-psk", self.key
+
+        else :
+            if self.essid :
+                print >>fp, "wireless-essid", self.essid
+            if self.key :
+                print >>fp, "wireless-key", self.key
+
+        fp.close()
+        # Now we have /etc/network/interfaces.
+
+    def set_scheme_manual(self, iface, add) :
+        """Update /etc/network/interfaces with info for the current scheme"""
+
+        if not add :
+            netutils.ifdown_all()
+
+        print "Calling ifconfig up"
+        iface.ifconfig_up()
+
+        if self.encryption == "wep" or self.encryption == "open" :
+            # iwconfig doesn't work reliably unless you specify the
+            # MAC address of the accesspoint. Sometimes it works
+            # without that, but don't count on it.
+            accesspoint = None
+            if self.essid != '' :
+                aplist = netutils.get_accesspoints()
+                for ap in aplist :
+                    if ap.essid == self.essid :
+                        accesspoint = ap
+                if accesspoint == None :
+                    print "No accesspoint matching '%s' -- giving up" \
+                        % (self.essid)
+                    sys.exit(1)
+
+            iwargs = ["iwconfig", iface.name ]
+            if self.essid :
+                iwargs.append("essid")
+                iwargs.append(self.essid)
+            #iwargs.append("mode")
+            #iwargs.append("managed")
+            if accesspoint and accesspoint.address :
+                iwargs.append("ap")
+                iwargs.append(accesspoint.address)
+            if self.key :
+                iwargs.append("key")
+                iwargs.append(self.key)
+            else :
+                iwargs.append("key")
+                iwargs.append("off")
+                iwargs.append("enc")
+                iwargs.append("off")
+            print "Calling", iwargs
+            subprocess.call(iwargs)
+
+        elif self.encryption == "wpa" :
+            tempfp = tempfile.NamedTemporaryFile(prefix="wpasup",
+                                                 delete=False)
+            tempname = tempfp.name
+            print "tempname =", tempname
+            print "ssid", self.essid, "key", self.key
+            print >>tempfp, """network={
+ssid="%s"
+scan_ssid=1
+key_mgmt=WPA-PSK
+psk="%s"
+}""" % (self.essid, self.key)
+            tempfp.close()
+            print "Starting wpa_supplicant"
+            subprocess.Popen(["wpa_supplicant", "wpa_supplicant",
+                              "-Dwext", "-i", iface.name, "-c", tempname])
+            # Is 1 second long enough for wpa_supplicant to open the file?
+            # 2 might be safer. What a drag.
+            time.sleep(2)
+            print "removing tmp file"
+            os.unlink(tempname)
+
+        if self.dhcp :
+            print "Getting dhcp"
+            subprocess.call(["dhcpcd", "-G", "-C", "resolv.conf", iface.name])
+            #subprocess.call(["dhclient", "-v", iface.name])
+
+        else :
+            if not self.ip :
+                print "Eek -- you need either dhcp or an IP address"
+            ifcargs = ["ifconfig", iface.name, self.ip]
+            if self.netmask :
+                ifcargs.append("netmask")
+                ifcargs.append(self.netmask)
+            if self.broadcast :
+                ifcargs.append("broadcast")
+                ifcargs.append(self.broadcast)
+            subprocess.call(ifcargs)
+            if self.gateway :
+                r = netutils.Route("default", self.gateway, iface.name)
+                r.add()
+                #subprocess.call(["route", "add", "default", "gw",
+                #                 self.gateway])
+
+    def set_scheme(self, add=False) :
+        """Make this scheme active on the current machine.
+        """
+
+        # Figure out what interface we'll be using:
+        iface = None
+        all = netutils.get_interfaces()
+        # find the first wireless interface
+        for i in all :
+            print "Trying interface", i.name
+            # The clause from hell. What this does is:
+            # - If the scheme has an encryption setting (including "open")
+            #   then it's a wireless scheme and needs a wireless interface.
+            # - In addition, whether it's wired or wireless, if add is true
+            #   then we're trying to add an additional interface, so we
+            #   can't use any interface that's already up.
+            if ((self.encryption and i.wireless) or \
+                    (not self.encryption and not i.wireless)) \
+                    and (not add or not i.up) :
+                iface = i
+                break
+        if not iface :
+            print "Couldn't find an interface to set the scheme"
+            return
+
+        # Are we on debian?
+        is_deb = is_debian()
+        if is_deb :
+            self.set_scheme_debian(iface, add)
+        else :
+            self.set_scheme_manual(iface, add)
+
+        # Either way, update resolv.conf if applicable
+        if self.dns_servers and len(self.dns_servers) > 0 :
+            if (add) :
+                print "Warning: new DNS settings may override old ones"
+                print "DNS servers:", self.dns_servers, len(self.dns_servers)
+            fp = open("/etc/resolv.conf", "w")
+            for serv in self.dns_servers :
+                print >>fp, "nameserver", serv
+            fp.close()
+
+        # If we're adding a new wireless interface to a working wired,
+        # setup, dhclient will be happy to overwrite the existing working
+        # resolv.conf with something new that's probably worse.
+        # It also overwrites routing, but it's not clear
+        # if there's anything we can do about that.
+        # So try to keep it from writing.
+        # XXX Ugh! This is awful -- is there a real solution?
+        # Happily, dhcpcd actually allows control over this!
+        # elif add :
+        #     print "**** Trying to make resolv.conf unwritable"
+        #     os.chmod("/etc/resolv.conf", 0444)
+        #     os.system("chattr +i /etc/resolv.conf")
+        #     #print >>fp, "pre-up chmod 444 /etc/resolv.conf"
+        #     #print >>fp, "pre-up chattr +i /etc/resolv.conf"
+        #     pass
+
+        # Mark the interface up (and call ifup too, if applicable)
+        subprocess.call(["ifconfig", iface.name, "up"])
+
+        if is_deb :
+            subprocess.call(["ifup", iface.name])
+            subprocess.call(["service", "networking", "restart"])
+
+        # Try to make the routing tables sane:
+        # in particular, if more than one interface is up, make sure
+        # there's no wifi default route blocking on on a wired interface.
+        up_ifaces = netutils.get_interfaces(True)
+        if len(up_ifaces) > 0 :
+            rt = netutils.Route.read_route_table()
+            # print "Route table:", rt
+            defaults = []
+            for r in rt :
+                if r.dest == 'default' or r.dest == '0.0.0.0' :
+                    defaults.append(r)
+                    print "Default route:", r
+            print "============"
+            if len(defaults) > 1 :
+                wired_route = None
+                # Find the first wired route
+                for r in defaults :
+                    for iface in up_ifaces :
+                        if r.iface == iface.name and not iface.wireless :
+                            wired_route = r
+                            print "  Wired route:", r
+                            break
+                if wired_route :
+                    print "Using default route", wired_route
+                    for r in defaults :
+                        if r != wired_route :
+                            print "Deleting route", r
+                            r.delete()
+        # if add :
+        #     print "**** Making resolv.conf writable again"
+        #     os.system("chattr -i /etc/resolv.conf")
+        #     os.chmod("/etc/resolv.conf", 0644)
+        #     #print >>fp, "post-up chmod 644 /etc/resolv.conf"
+        #     #print >>fp, "post-up chattr -i /etc/resolv.conf"
+
+def is_debian() :
+    return os.access("/etc/network/interfaces", os.R_OK)
+
+def print_current_scheme() :
+    ifaces = netutils.get_interfaces()
+    for iface in ifaces :
+        if not iface.up :
+            continue
+
+        print iface.name, ":",
+
+        matchscheme = None
+        for scheme in Schemes :
+            if iface.wireless and iface.essid == scheme.essid :
+                matchscheme = scheme
+                break
+            elif not iface.wireless and iface.ip == scheme.ip :
+                matchscheme = scheme
+                break
+        if matchscheme :
+            print "Netscheme", scheme.name
+        else :
+            print "(no netscheme found)"
+
+        if iface.wireless :
+            if iface.essid :
+                print "  ESSID:", iface.essid
+        if iface.ip :
+            if matchscheme and matchscheme.dhcp :
+                print "  IP:", iface.ip, "(dhcp)"
+            else :
+                print "  IP:", iface.ip
+
+def list_accesspoints(maxap=20) :
+    aplist = netutils.get_accesspoints()
+
+    print "Visible access points:"
+    for ap in aplist :
+        # Show mode if it's anything but Master -- e.g. Ad-hoc
+        mode = ''
+        if ap.mode != 'Master' :
+            mode = ' (' + ap.mode + ')'
+        print "%-22s : %-10s %-10s %s" % (ap.essid,
+                                          ap.encryption,
+                                          mode, ap.quality)
+        continue
+
+def list_schemes() :
+    for scheme in Schemes :
+        print scheme.name
+
+def reset_current_scheme() :
+    print "Sorry, resetting is unreliable right now"
+    if is_debian() :
+        subprocess.call(["service", "networking", "restart"])
+    else :
+        ifaces = netutils.get_interfaces(True)
+        netutils.ifdown_all()
+        for iface in ifaces :
+            subprocess.call(["ifconfig", iface, "up"])
+
+def find_and_set_scheme(newscheme, add=False) :
+    for scheme in Schemes :
+        if scheme.name != newscheme :
+            continue
+        # Found it; scheme is a NetScheme object.
+        scheme.set_scheme(add)
+        return
+
+    print "No scheme named", newscheme
+
+    aplist = netutils.get_accesspoints()
+    for ap in aplist :
+        if ap.essid == newscheme :
+            ans = raw_input("Use it anyway? (Y/n) ")
+            if ans != 'y' and ans != 'Y' and ans != '':
+                sys.exit(1)
+
+            # Use the scheme
+            scheme = NetScheme(ap.essid, True, '', '', '', '',
+                               ap.encryption, ap.essid)
+            if ap.interface :
+                scheme.interface = ap.interface
+            scheme.set_scheme()
+
+            ans = raw_input("Save this scheme for later? (y/N) ")
+            if ans == 'y' or ans == 'Y' :
+                scheme.dump()
+
+#
+# A couple of default schemes:
+#
+Schemes = [
+    NetScheme("dhcp", True, encryption=None),    # wired
+    NetScheme("wifi", True, encryption='open'),  # wireless
+    ]
+
+# main
+if __name__ == "__main__" :
+    # Outer try clause to handle keyboard interrupts and not show
+    # the user a nasty Python stack trace. Using signal.signal to
+    # catch SIGINT doesn't work, perhaps because of the subprocesses
+    # we need to call?
+    try :
+        from optparse import OptionParser
+        usage = """Usage: %prog [-c [-s]] [scheme] | -l | -a | -r
+    %prog changes your network (wi-fi) settings in /etc/network/interfaces.
+    You can make named schemes, like "home" or "work", matching places you
+    go frequently, or just make temporary schemes for places you visit briefly.
+    """
+        versionstr = "%prog 0.6: Set wireless network schemes.\n\
+    Copyright 2010 by Akkana Peck; share and enjoy under the GPL v.2 or later."
+        parser = OptionParser(usage=usage, version=versionstr)
+        parser.add_option("-l", "--list",
+                          action="store_true", dest="list_schemes",
+                          default=False,
+                          help="List the known schemes")
+        parser.add_option("-a", "--accesspoints",
+                          action="store_true", dest="list_accesspoints",
+                          default=False,
+                          help="List available accesspoints")
+        parser.add_option("-r", "--reset",
+                          action="store_true", dest="reset_current_scheme",
+                          default=False,
+                          help="Reset the connection without changing scheme")
+        parser.add_option("-m", "--multi",
+                          action="store_true", dest="add",
+                          default=False,
+                          help="Add a new interface without bringing down current one")
+        parser.add_option("-s", "--save",
+                          action="store_true", dest="save_new_scheme",
+                          default=False,
+                          help="Reset the connection without changing scheme")
+        # parser.add_option("-c", "--create", metavar="new-SSID",
+        #                   action="store", dest="newscheme",
+        #                   help="Create a new scheme (temporary unless -s is also set)")
+        (options, args) = parser.parse_args()
+
+        # Read in a list of NetSchemes from the config file
+        config = ConfigParser({'dhcp':False, 'ip':'',
+                               'netmask':'', 'broadcast':'', 'gateway':'',
+                               'encryption':'', 'essid':'', 'key':'',
+                               'interface':'', 'dns_servers':''})
+
+        configfile = homedirfile(".netscheme")
+
+        config.read(configfile)
+        #print "Reading from config", configfile
+        for scheme in config.sections() :
+            newscheme = NetScheme(name = scheme,
+                                  dhcp = config.getboolean(scheme, 'dhcp'),
+                                  ip = config.get(scheme, 'ip'),
+                                  netmask = config.get(scheme, 'netmask'),
+                                  broadcast = config.get(scheme, 'broadcast'),
+                                  gateway = config.get(scheme, 'gateway'),
+                                  encryption = config.get(scheme,
+                                                          'encryption'),
+                                  essid = config.get(scheme, 'essid'),
+                                  key = config.get(scheme, 'key'),
+                                  dns_servers = config.get(scheme,
+                                                           'dns_servers') \
+                                                                 .split(','))
+            newscheme.interface = config.get(scheme, 'interface')
+            Schemes.append(newscheme)
+
+        if (options.list_schemes) :
+            list_schemes()
+        elif (options.list_accesspoints) :
+            list_accesspoints()
+        elif (options.reset_current_scheme) :
+            reset_current_scheme()
+        elif len(args) < 1 :
+            #print parser.usage
+            print_current_scheme()
+        else :
+            find_and_set_scheme(args[0], options.add)
+    except KeyboardInterrupt :
+        print "Interrupt"
