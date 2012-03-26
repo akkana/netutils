@@ -5,7 +5,7 @@
 # ... share and enjoy under the GPLv2 or (at your option) later.
 
 """netutils: a set of networking utilities for Python.
-Copyright 2010 by Akkana Peck <akkana@shallowsky.com>
+Copyright 2010, 2011 by Akkana Peck <akkana@shallowsky.com>
  ... share and enjoy under the GPLv2 or (at your option) later.
 
 Provides the following:
@@ -25,7 +25,7 @@ Functions outside of classes:
     of the names in namelist. Return a list of actual process names killed.
 """
 
-import os, subprocess, re
+import os, subprocess, re, shutil
 
 class NetInterface :
     """A network interface, like eth1 or wlan0."""
@@ -70,6 +70,130 @@ class NetInterface :
     def ifconfig_down(self) :
         """Mark the interface DOWN with ifconfig"""
         subprocess.call(["ifconfig", self.name, "down"])
+
+
+class Connection :
+    def __init__(self, iface=None) :
+        if iface :
+            self.iface = iface
+        else :
+            self.iface = get_first_wireless_interface().name
+
+        self.essid = "unknown"
+
+class ManualConnection(Connection) :
+    def __init__(self, iface=None):
+        Connection.__init__(self, iface)
+  
+    def connect(self, essid):
+        """Connect to a particular essid doing all the steps manually.
+           Pass essid=None to de-associate the interface from any essid.
+        """
+        netutils.ifdown_all()
+  
+        iface.ifconfig_up()
+  
+        iwargs = ["iwconfig", iface.name ]
+        if essid :
+            iwargs.append("essid")
+            iwargs.append(essid)
+        #iwargs.append("mode")
+        #iwargs.append("managed")
+  
+        iwargs.append("key")
+        iwargs.append("off")
+        iwargs.append("enc")
+        iwargs.append("off")
+  
+        subprocess.call(iwargs)
+  
+        try :
+            # Debian uses different args for DHCP clients than anyone else
+            if os.access("/sbin/dhcpcd", os.R_OK):
+                subprocess.check_call(["dhcpcd", "-G", "-C", "resolv.conf",
+                                 iface.name])
+            else:
+                subprocess.check_call(["dhclient", iface.name])
+        except subprocess.CalledProcessError, e :
+            print "DHCP failed, error", e.returncode
+            iface.ifconfig_down()
+  
+            # Mark the interface up (and call ifup too, if applicable)
+            subprocess.call(["ifconfig", iface.name, "up"])
+  
+        self.essid = essid
+  
+    def reset(self):
+        print "Sorry, manual reset isn't defined yet! Please implement me!"
+        self.essid = None
+
+class DebianConnection(Connection) :
+    def __init__(self, iface=None) :
+        Connection.__init__(self, iface)
+        self.interfaces = "/etc/network/interfaces"
+        self.interfaces_bak = "/etc/network/interfaces.bak"
+
+        print "Initialized debian connection, iface = ", self.iface
+
+        # Save off the old /etc/network/interfaces,
+        # since we'll be replacing it:
+        try :
+          shutil.copy2(self.interfaces, self.interfaces_bak)
+        except :
+          print "Couldn't back up interfaces file"
+
+    # Debian doesn't work well with manual networking tools --
+    # DHCP, in particular, works a lot less reliably on Debian than
+    # on other distros unless it's called automatically from the
+    # networking service.
+    def connect(self, essid) :
+        """Connect to a particular essid using /etc/network/interfaces.
+           Pass essid=None to de-associate the interface from any essid.
+        """
+
+        # If we're connected when we start, try to zero out networking first.
+        if self.essid :
+            subprocess.call(["ifconfig", self.iface, "down"])
+            fp = open(self.interfaces, "w")
+            print >>fp, """auto lo
+iface lo inet loopback
+"""
+            fp.close()
+            self.essid = None
+            subprocess.call(["service", "networking", "restart"])
+
+        # Okay, now it's reset, so specify the new network:
+        subprocess.call(["ifconfig", self.iface, "down"])
+        subprocess.call(["ifdown", self.iface])
+        fp = open(self.interfaces, "w")
+        print >>fp, """auto lo
+iface lo inet loopback
+
+auto %s
+iface %s inet dhcp
+wireless-essid %s
+""" % (self.iface, self.iface, essid)
+        fp.close()
+
+        # Mark the interface up (and call ifup too, if applicable).
+        # The difference among all these isn't documented, and in theory
+        # you should be able to call just ifup, but empirically this is
+        # the most reliable sequence:
+        subprocess.call(["ifconfig", self.iface, "up"])
+        subprocess.call(["ifup", self.iface])
+        subprocess.call(["service", "networking", "restart"])
+
+        self.essid = essid
+
+    def reset(self ):
+        """Reset everything back to working the way it was before you started"""
+        subprocess.call(["service", "networking", "stop"])
+        shutil.copy2(self.interfaces_bak, self.interfaces)
+        subprocess.call(["ifconfig", self.iface, "up"])
+        subprocess.call(["ifup", self.iface])
+        subprocess.call(["service", "networking", "start"])
+
+        self.essid = "unknown"
 
 class AccessPoint :
     """ One Cell or AccessPoint from iwlist output"""
@@ -128,8 +252,8 @@ default         192.168.1.1     0.0.0.0         UG        0 0          0 wlan0
 
     def call_route(self, cmd) :
         """Backend routine to call the system route command.
-cmd is either "add" or "delete".
-Users should normally call add() or delete() instead."""
+           cmd is either "add" or "delete".
+           Users should normally call add() or delete() instead."""
         args = [ "route", cmd ]
 
         # Syntax seems to be different depending whether dest is "default"
@@ -137,7 +261,9 @@ Users should normally call add() or delete() instead."""
         if self.dest == 'default' or self.dest == '0.0.0.0' :
             # route add default gw 192.168.1.1
             # route del default gw 192.168.160.1
-            args.append(self.dest)
+            # Must use "default" rather than "0.0.0.0" --
+            # the numeric version results in "SIOCDELRT: No such process"
+            args.append("default")
             if self.gateway :
                 args.append("gw")
                 args.append(self.gateway)
@@ -169,7 +295,7 @@ Users should normally call add() or delete() instead."""
     @staticmethod
     def read_route_table() :
         """Read the system routing table, returning a list of Routes."""
-        proc = subprocess.Popen('route', shell=False, stdout=subprocess.PIPE)
+        proc = subprocess.Popen('route -n', shell=True, stdout=subprocess.PIPE)
         stdout_str = proc.communicate()[0]
         stdout_list = stdout_str.split('\n')
 
@@ -181,13 +307,16 @@ Users should normally call add() or delete() instead."""
 
         return rtable
 
-def get_interfaces(only_up=False) :
+def get_interfaces(only_up=False, name=None) :
     """Returns a list of NetInterfaces for all eth*, wlan* or mlan*
        interfaces visible from ifconfig.
        Omit lo, vpn, ipv6 and other non-physical interfaces.
        If only_up is true, use ifconfig instead if ifconfig -a.
+       If name is specified, return only the first matching that name.
     """
-    if only_up :
+    if name :
+      ifcfg = "ifconfig " + name
+    elif only_up :
         ifcfg = 'ifconfig'
     else :
         ifcfg = '/sbin/ifconfig -a'
@@ -254,6 +383,12 @@ def get_interfaces(only_up=False) :
                         cur_iface.essid = match.group(1)
                         # print "And it has essid", iface.essid
 
+    # If name was specified, return only that single interface:
+    if name:
+        if len(ifaces) <= 0 or ifaces[0].name != name:
+            return None
+        return ifaces[0]
+
     return ifaces
 
 def get_wireless_interfaces() :
@@ -264,6 +399,15 @@ def get_wireless_interfaces() :
         if iface.wireless :
             wifaces.append(iface)
     return wifaces
+
+def get_first_wireless_interface():
+    """Returns the first available wireless interface
+    """
+    wifaces = []
+    for iface in get_interfaces() :
+        if iface.wireless :
+            return iface
+    return None
 
 def get_accesspoints() :
     """Return a list of visible wireless accesspoints."""

@@ -1,14 +1,14 @@
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
-<html><head><title>Python: module netutils</title>
+<html><head><title>Python: module netutils-1.3</title>
 </head><body bgcolor="#f0f0f8">
 
 <table width="100%" cellspacing=0 cellpadding=2 border=0 summary="heading">
 <tr bgcolor="#7799ee">
 <td valign=bottom>&nbsp;<br>
-<font color="#ffffff" face="helvetica, arial">&nbsp;<br><big><big><strong>netutils</strong></big></big></font></td
+<font color="#ffffff" face="helvetica, arial">&nbsp;<br><big><big><strong><a href="netutils-1.html"><font color="#ffffff">netutils-1</font></a>.3</strong></big></big></font></td
 ><td align=right valign=bottom
-><font color="#ffffff" face="helvetica, arial"><a href=".">index</a><br><a href="file:/home/akkana/bin/netutils.py">/home/akkana/bin/netutils.py</a></font></td></tr></table>
+><font color="#ffffff" face="helvetica, arial"><a href=".">index</a><br><a href="file:/home/akkana/web/software/netscheme/netutils-1.3.py">/home/akkana/web/software/netscheme/netutils-1.3.py</a></font></td></tr></table>
     <p><tt>netutils:&nbsp;a&nbsp;set&nbsp;of&nbsp;networking&nbsp;utilities&nbsp;for&nbsp;Python.<br>
 Copyright&nbsp;2010&nbsp;by&nbsp;Akkana&nbsp;Peck&nbsp;&lt;akkana@shallowsky.com&gt;<br>
 &nbsp;...&nbsp;share&nbsp;and&nbsp;enjoy&nbsp;under&nbsp;the&nbsp;GPLv2&nbsp;or&nbsp;(at&nbsp;your&nbsp;option)&nbsp;later.<br>
@@ -37,8 +37,9 @@ Functions&nbsp;outside&nbsp;of&nbsp;classes:<br>
 <tr><td bgcolor="#aa55cc"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
 <td width="100%"><table width="100%" summary="list"><tr><td width="25%" valign=top><a href="os.html">os</a><br>
 </td><td width="25%" valign=top><a href="re.html">re</a><br>
+</td><td width="25%" valign=top><a href="shutil.html">shutil</a><br>
 </td><td width="25%" valign=top><a href="subprocess.html">subprocess</a><br>
-</td><td width="25%" valign=top></td></tr></table></td></tr></table><p>
+</td></tr></table></td></tr></table><p>
 <table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
 <tr bgcolor="#ee77aa">
 <td colspan=3 valign=bottom>&nbsp;<br>
@@ -46,9 +47,16 @@ Functions&nbsp;outside&nbsp;of&nbsp;classes:<br>
     
 <tr><td bgcolor="#ee77aa"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
 <td width="100%"><dl>
-<dt><font face="helvetica, arial"><a href="netutils.html#AccessPoint">AccessPoint</a>
-</font></dt><dt><font face="helvetica, arial"><a href="netutils.html#NetInterface">NetInterface</a>
-</font></dt><dt><font face="helvetica, arial"><a href="netutils.html#Route">Route</a>
+<dt><font face="helvetica, arial"><a href="netutils-1.3.html#AccessPoint">AccessPoint</a>
+</font></dt><dt><font face="helvetica, arial"><a href="netutils-1.3.html#Connection">Connection</a>
+</font></dt><dd>
+<dl>
+<dt><font face="helvetica, arial"><a href="netutils-1.3.html#DebianConnection">DebianConnection</a>
+</font></dt><dt><font face="helvetica, arial"><a href="netutils-1.3.html#ManualConnection">ManualConnection</a>
+</font></dt></dl>
+</dd>
+<dt><font face="helvetica, arial"><a href="netutils-1.3.html#NetInterface">NetInterface</a>
+</font></dt><dt><font face="helvetica, arial"><a href="netutils-1.3.html#Route">Route</a>
 </font></dt></dl>
  <p>
 <table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
@@ -63,6 +71,46 @@ Functions&nbsp;outside&nbsp;of&nbsp;classes:<br>
 <dl><dt><a name="AccessPoint-__init__"><strong>__init__</strong></a>(self)</dt></dl>
 
 <dl><dt><a name="AccessPoint-clear"><strong>clear</strong></a>(self)</dt><dd><tt>Clear&nbsp;all&nbsp;parameters</tt></dd></dl>
+
+</td></tr></table> <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="Connection">class <strong>Connection</strong></a></font></td></tr>
+    
+<tr><td bgcolor="#ffc8d8"><tt>&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%">Methods defined here:<br>
+<dl><dt><a name="Connection-__init__"><strong>__init__</strong></a>(self, iface<font color="#909090">=None</font>)</dt></dl>
+
+</td></tr></table> <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="DebianConnection">class <strong>DebianConnection</strong></a>(<a href="netutils-1.3.html#Connection">Connection</a>)</font></td></tr>
+    
+<tr><td bgcolor="#ffc8d8"><tt>&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%">Methods defined here:<br>
+<dl><dt><a name="DebianConnection-__init__"><strong>__init__</strong></a>(self, iface<font color="#909090">=None</font>)</dt></dl>
+
+<dl><dt><a name="DebianConnection-connect"><strong>connect</strong></a>(self, essid)</dt><dd><tt>Connect&nbsp;to&nbsp;a&nbsp;particular&nbsp;essid&nbsp;using&nbsp;/etc/network/interfaces.<br>
+Pass&nbsp;essid=None&nbsp;to&nbsp;de-associate&nbsp;the&nbsp;interface&nbsp;from&nbsp;any&nbsp;essid.</tt></dd></dl>
+
+<dl><dt><a name="DebianConnection-reset"><strong>reset</strong></a>(self)</dt><dd><tt>Reset&nbsp;everything&nbsp;back&nbsp;to&nbsp;working&nbsp;the&nbsp;way&nbsp;it&nbsp;was&nbsp;before&nbsp;you&nbsp;started</tt></dd></dl>
+
+</td></tr></table> <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="ManualConnection">class <strong>ManualConnection</strong></a>(<a href="netutils-1.3.html#Connection">Connection</a>)</font></td></tr>
+    
+<tr><td bgcolor="#ffc8d8"><tt>&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%">Methods defined here:<br>
+<dl><dt><a name="ManualConnection-__init__"><strong>__init__</strong></a>(self, iface<font color="#909090">=None</font>)</dt></dl>
+
+<dl><dt><a name="ManualConnection-connect"><strong>connect</strong></a>(self, essid)</dt><dd><tt>Connect&nbsp;to&nbsp;a&nbsp;particular&nbsp;essid&nbsp;doing&nbsp;all&nbsp;the&nbsp;steps&nbsp;manually.<br>
+Pass&nbsp;essid=None&nbsp;to&nbsp;de-associate&nbsp;the&nbsp;interface&nbsp;from&nbsp;any&nbsp;essid.</tt></dd></dl>
+
+<dl><dt><a name="ManualConnection-reset"><strong>reset</strong></a>(self)</dt></dl>
 
 </td></tr></table> <p>
 <table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
@@ -121,13 +169,22 @@ Static methods defined here:<br>
     
 <tr><td bgcolor="#eeaa77"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
 <td width="100%"><dl><dt><a name="-get_accesspoints"><strong>get_accesspoints</strong></a>()</dt><dd><tt>Return&nbsp;a&nbsp;list&nbsp;of&nbsp;visible&nbsp;wireless&nbsp;accesspoints.</tt></dd></dl>
- <dl><dt><a name="-get_interfaces"><strong>get_interfaces</strong></a>(only_up<font color="#909090">=False</font>)</dt><dd><tt>Returns&nbsp;a&nbsp;list&nbsp;of&nbsp;NetInterfaces&nbsp;for&nbsp;all&nbsp;eth*,&nbsp;wlan*&nbsp;or&nbsp;mlan*<br>
+ <dl><dt><a name="-get_first_wireless_interface"><strong>get_first_wireless_interface</strong></a>()</dt><dd><tt>Returns&nbsp;the&nbsp;first&nbsp;available&nbsp;wireless&nbsp;interface</tt></dd></dl>
+ <dl><dt><a name="-get_interfaces"><strong>get_interfaces</strong></a>(only_up<font color="#909090">=False</font>, name<font color="#909090">=None</font>)</dt><dd><tt>Returns&nbsp;a&nbsp;list&nbsp;of&nbsp;NetInterfaces&nbsp;for&nbsp;all&nbsp;eth*,&nbsp;wlan*&nbsp;or&nbsp;mlan*<br>
 interfaces&nbsp;visible&nbsp;from&nbsp;ifconfig.<br>
 Omit&nbsp;lo,&nbsp;vpn,&nbsp;ipv6&nbsp;and&nbsp;other&nbsp;non-physical&nbsp;interfaces.<br>
-If&nbsp;only_up&nbsp;is&nbsp;true,&nbsp;use&nbsp;ifconfig&nbsp;instead&nbsp;if&nbsp;ifconfig&nbsp;-a.</tt></dd></dl>
+If&nbsp;only_up&nbsp;is&nbsp;true,&nbsp;use&nbsp;ifconfig&nbsp;instead&nbsp;if&nbsp;ifconfig&nbsp;-a.<br>
+If&nbsp;name&nbsp;is&nbsp;specified,&nbsp;return&nbsp;only&nbsp;the&nbsp;first&nbsp;matching&nbsp;that&nbsp;name.</tt></dd></dl>
  <dl><dt><a name="-get_wireless_interfaces"><strong>get_wireless_interfaces</strong></a>()</dt><dd><tt>Returns&nbsp;a&nbsp;list&nbsp;of&nbsp;wireless&nbsp;interfaces&nbsp;available.</tt></dd></dl>
  <dl><dt><a name="-ifdown_all"><strong>ifdown_all</strong></a>()</dt><dd><tt>Take&nbsp;all&nbsp;current&nbsp;interfaces&nbsp;down.</tt></dd></dl>
  <dl><dt><a name="-kill_by_name"><strong>kill_by_name</strong></a>(namelist)</dt><dd><tt>Kills&nbsp;all&nbsp;running&nbsp;processes&nbsp;that&nbsp;start&nbsp;with&nbsp;any&nbsp;of&nbsp;the<br>
 strings&nbsp;in&nbsp;the&nbsp;given&nbsp;name&nbsp;list.</tt></dd></dl>
-</td></tr></table>
+</td></tr></table><p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#55aa55">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Data</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#55aa55"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><strong>__warningregistry__</strong> = {("Parent module 'netutils-1' not found while handling absolute import", &lt;type 'exceptions.RuntimeWarning'&gt;, 28): True}</td></tr></table>
 </body></html>
