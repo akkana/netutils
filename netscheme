@@ -1,0 +1,54 @@
+#! /bin/sh
+
+if [ $# -le 0 ]; then
+  echo -n "Current scheme: "
+  cat /etc/network/schemes/current
+  exit 0
+fi
+
+newscheme=$1
+echo "Changing scheme to $newscheme"
+
+ifupdown() {
+  iface=$1
+  if grep -q "iface $iface" /etc/network/interfaces; then
+    ifconfig $iface up
+  else
+    ifconfig $iface down
+  fi
+}
+
+/etc/init.d/networking stop
+
+echo $newscheme >/etc/network/schemes/current
+
+if [ -f /etc/network/schemes/interfaces-$newscheme ]; then
+  cp /etc/network/schemes/interfaces-$newscheme /etc/network/interfaces
+  if [ -f /etc/network/schemes/resolv.conf-$newscheme ]; then
+    cp /etc/network/schemes/resolv.conf-$newscheme /etc/resolv.conf
+  fi
+else
+  echo -n "No scheme '$newscheme' -- create one for that essid?"
+  read ans
+  if [ x$ans = xn ]; then
+    exit 0
+  fi
+  cat >/etc/network/interfaces <<EOF1
+auto lo
+iface lo inet loopback
+
+auto eth1
+allow-hotplug eth1
+iface eth1 inet dhcp
+EOF1
+  echo "wireless-essid $newscheme" >>/etc/network/interfaces
+fi
+
+# On a laptop with built-in wifi and wired,
+# ubuntu won't automatically disable one and enable the other.
+# So do it manually (sigh):
+
+ifupdown eth0
+ifupdown eth1
+
+/etc/init.d/networking start
