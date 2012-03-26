@@ -51,7 +51,11 @@ class NetScheme :
         else :
             self.encryption = None
         self.key = key
-        self.dns_servers = dns_servers
+        if not dns_servers or dns_servers == '' or \
+                (len(dns_servers) == 1 and dns_servers[0] == '') :
+            self.dns_servers = None
+        else :
+            self.dns_servers = dns_servers
         self.interface = None
 
         # Sanity check: if there's an essid then encryption should be set
@@ -137,7 +141,9 @@ auto %s""" % (iface.name)
             if self.gateway :
                 print >>fp, "gateway", self.gateway
 
-        if self.encryption == "wpa" :
+        print "Encryption:", self.encryption
+        if self.encryption == "wpa" or self.encryption == "wpa2" :
+            print "It's WPA"
             if self.essid :
                 print >>fp, "wpa-ssid", self.essid
             if self.key :
@@ -209,16 +215,18 @@ key_mgmt=WPA-PSK
 psk="%s"
 }""" % (self.essid, self.key)
             tempfp.close()
+            print "Starting wpa_supplicant"
             subprocess.Popen(["wpa_supplicant", "wpa_supplicant",
                               "-Dwext", "-i", iface.name, "-c", tempname])
             # Is 1 second long enough for wpa_supplicant to open the file?
             # 2 might be safer. What a drag.
             time.sleep(2)
+            print "removing tmp file"
             os.unlink(tempname)
 
         if self.dhcp :
             print "Getting dhcp"
-            subprocess.call(["dhcpcd", iface.name])
+            subprocess.call(["dhcpcd", "-G", "-C", "resolv.conf", iface.name])
             #subprocess.call(["dhclient", "-v", iface.name])
 
         else :
@@ -274,6 +282,7 @@ psk="%s"
         if self.dns_servers and len(self.dns_servers) > 0 :
             if (add) :
                 print "Warning: new DNS settings may override old ones"
+                print "DNS servers:", self.dns_servers, len(self.dns_servers)
             fp = open("/etc/resolv.conf", "w")
             for serv in self.dns_servers :
                 print >>fp, "nameserver", serv
@@ -286,10 +295,14 @@ psk="%s"
         # if there's anything we can do about that.
         # So try to keep it from writing.
         # XXX Ugh! This is awful -- is there a real solution?
-        elif add :
-            os.chmod("/etc/resolv.conf", 0444)
-            #print >>fp, "pre-up chmod 444 /etc/resolv.conf"
-            #print >>fp, "pre-up chattr +i /etc/resolv.conf"
+        # Happily, dhcpcd actually allows control over this!
+        # elif add :
+        #     print "**** Trying to make resolv.conf unwritable"
+        #     os.chmod("/etc/resolv.conf", 0444)
+        #     os.system("chattr +i /etc/resolv.conf")
+        #     #print >>fp, "pre-up chmod 444 /etc/resolv.conf"
+        #     #print >>fp, "pre-up chattr +i /etc/resolv.conf"
+        #     pass
 
         # Mark the interface up (and call ifup too, if applicable)
         subprocess.call(["ifconfig", iface.name, "up"])
@@ -304,12 +317,13 @@ psk="%s"
         up_ifaces = netutils.get_interfaces(True)
         if len(up_ifaces) > 0 :
             rt = netutils.Route.read_route_table()
-            print "Route table:", rt
+            # print "Route table:", rt
             defaults = []
             for r in rt :
                 if r.dest == 'default' or r.dest == '0.0.0.0' :
                     defaults.append(r)
                     print "Default route:", r
+            print "============"
             if len(defaults) > 1 :
                 wired_route = None
                 # Find the first wired route
@@ -317,7 +331,7 @@ psk="%s"
                     for iface in up_ifaces :
                         if r.iface == iface.name and not iface.wireless :
                             wired_route = r
-                            print "Wired route:", r
+                            print "  Wired route:", r
                             break
                 if wired_route :
                     print "Using default route", wired_route
@@ -325,10 +339,12 @@ psk="%s"
                         if r != wired_route :
                             print "Deleting route", r
                             r.delete()
-        if add :
-            os.chmod("/etc/resolv.conf", 0644)
-            #print >>fp, "post-up chmod 644 /etc/resolv.conf"
-            #print >>fp, "post-up chattr -i /etc/resolv.conf"
+        # if add :
+        #     print "**** Making resolv.conf writable again"
+        #     os.system("chattr -i /etc/resolv.conf")
+        #     os.chmod("/etc/resolv.conf", 0644)
+        #     #print >>fp, "post-up chmod 644 /etc/resolv.conf"
+        #     #print >>fp, "post-up chattr -i /etc/resolv.conf"
 
 def is_debian() :
     return os.access("/etc/network/interfaces", os.R_OK)

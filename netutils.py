@@ -93,7 +93,6 @@ class Route :
     # Route(dest, gateway, iface, mask=None) :
     def __init__(self, *args) :
         if len(args) == 1 :
-            print "init from line", args
             self.init_from_line(args[0])
             return
 
@@ -152,8 +151,8 @@ Users should normally call add() or delete() instead."""
             if self.mask :
                 args.append("mask")
                 args.append(self.mask)
-            args.append("dev")
-            args.append(self.iface)
+        args.append("dev")
+        args.append(self.iface)
 
         print "Calling:", args
         subprocess.call(args)
