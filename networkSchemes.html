@@ -3,7 +3,7 @@
 <head>
   <meta content="text/html; charset=ISO-8859-1"
  http-equiv="content-type">
-  <title>network schemes howto</title>
+  <title>netschemes and netutils: network schemes in Python</title>
   <meta content="Akkana Peck" name="author">
   <style type="text/css">
   pre,code { color: rgb(153, 0, 0); }
@@ -11,369 +11,133 @@
   </style>
 </head>
 <body bgcolor="white" alink="#000099" link="#000099" vlink="#990099">
-<img alt="[tux networking]" src="../images/logos/tuxnetwork.jpg"
+<img alt="[tux networking]" src="/images/logos/tuxnetwork.jpg"
  align="right" height="187" width="256">
-<h1>Howto Set Up Multiple Network Schemes on a Linux Laptop</h1>
+<h1>netschemes and netutils</h1>
+<h2>Howto Set Up Multiple Network Schemes on a Linux Laptop</h2>
+... and ...
+<h2>a Python networking utility library</h2>
 
 <p>
 As you take your laptop from one network to the next, from home
 to work or from the coffee shop to the conference, how do you
 tell it about each new network?
 <p>
-Modern Linux systems come with nifty
-GUI programs such as <i>NetworkManager</i> -- but they have
-some drawbacks. They're sometimes tricky to use if you switch
-among several different networks, and NetworkManager in particular
-is rather heavyweight: it doesn't work unless you have a desktop
-with a panel and are running hald and all its associated daemons,
-and they can get confused if you have multiple network interfaces.
-On a laptop with modest hardware, it all seems like overkill.
-Isn't there a lighter-weight way to manage networks?
+Modern Linux systems come with nifty GUI programs such as
+<i>NetworkManager</i> and <i>wicd</i>, but I find them slightly
+cumbersome and hard to use. I find they're always trying to
+out-guess me about what network I really want to use, and they
+don't work terribly well with a lightweight desktop.
 <p>
-This HOWTO covers easy ways of setting up schemes, to make it
-very easy to move among different types of networks.
-I started developing this back around 2002 under Redhat 7.3 and 8.0,
-but the modern version (circa 2009) is based around Ubuntu/Debian
-systems and hasn't been tested on non-Debian systems.
-
+I find it much faster to type one command, like <b>netscheme home</b>
+or <b>netscheme work</b>, for networks I use a lot, and save all the
+fiddling with menus.
 <p>
-Some years after I first wrote this, a package called <i>netenv</i>
-appeared on Debian and Ubuntu which appeared to do exactly what my
-network schemes had been doing all along (even to using some of the
-same code). Unfortunately it was missing a few important elements
-and didn't actually work.  So I've stuck to my own scripts.
-
-<h2>Contents</h2>
+This page covers two topics:
 <ol>
-  <li><a href="#basics">The Basics</a></li>
-  <li><a href="#setup">Initial setup</a></li>
-  <li><a href="#newscheme">Making new schemes</a></li>
-  <ol>
-    <li><a href="#static">Static IP on eth0</a></li>
-    <li><a href="#wep">Wireless access on eth1 with an essid and a WEP key</a></li>
-    <li><a href="#wpa">Wireless with WPA -- maybe</a></li>
-    <li><a href="#hotpluggable">PCMCIA, Cardbus, USB</a>
-                                and the mysterious <i>allow-hotplug</i>
-				directive</li>
-    <li><a href="#schemenotes">Notes on scheme writing</a></li>
-  </ol>
-  <li><a href="#auto">Automatic schemes</a></li>
-  <li><a href="#resolv">Special DNS for specific schemes</a></li>
-  <li><a href="#PPP_Local">PPP + Local net</a> (for the rare folk
-                           still using a modem</li>
-
-<!-- 
-  <li><a href="#"></a></li>
- -->
+<li><a href="#netscheme"><b>Using</b> the high-level "netscheme" script</a>
+<li><a href="#netutils">The <b>Python "netutils.py"</b> network utility module</a>
 </ol>
 
-<a name="basics">
-<h2>The Basics: How to use network schemes</h2>
+<a name="netscheme">
+<h2>Using netscheme</h2>
 <p>
-Here's how my network schemes work:<br>
-You always have a net scheme which defines which network you'll
-try to connect to. For instance, you start out at home on your
-wired network, so you start with the scheme named "home".
-<p>
-Now you carry your laptop to work and want to connect to the
-wireless network there. You have to tell your laptop to
-disable the wired network, enable the wireless one, and
-connect with the appropriate passwords. You do that by typing:
-<pre>
-netscheme work
-</pre>
-<p>
-After work, you go to your favorite coffee shop. They have a
-wireless net too, but it's open, so using the password from work
-doesn't work there. So you type:
-<pre>
-netscheme cafe
-</pre>
-<p>
-And so on. If you go to a new place, you just make a new scheme.
+You need two Python scripts: <a href="netscheme-1.4">netscheme-1.4</a> and
+<a href="netutils-1.4.py">netutils-1.4.py</a>.
+Put them somewhere in your path and name them netscheme and netutils.py:
+I put them in $HOME/bin, my personal bin directory, but somewhere like 
+/usr/local/bin is also fine.
 
-<a name="setup">
-<h2>Initial setup</h2>
 <p>
-On Debian-based systems (including derivatives like Ubuntu),
-networking is handled through a directory called
-<i>/etc/network</i>; in particular, there's a file called
-<i>/etc/network/interfaces</i> that controls how the machine will
-attempt to connect to either wired or wireless networks.
-That's where you set all sorts of values like the IP address or
-DHCP, the wireless essid and key, and so forth.
-<p>
-What we'll do is create a bunch of <i>interfaces</i> files suitable
-for different conditions, and give them appropriate names.
-<p>
-Let's start with the simplest possible interfaces file:
-a wired network, on interface <i>eth0</i>, using DHCP.
-That looks like this:
+By default, netscheme knows about two schemes.
+The first, "dhcp", will try to set up a connection using your first wired
+ethernet port (e.g. eth0) and a DHCP address. To use it, type:
 <pre>
-# The loopback network interface
-auto lo
-iface lo inet loopback
-
-# The primary network interface
-auto eth0
-iface eth0 inet dhcp
+sudo netscheme dhcp
 </pre>
 
 <p>
-Compare that with your own <i>/etc/network/interfaces</i>. Use your
-own version for the next step if it's different from this one.
+The second built-in scheme, "wifi", is also DHCP, but uses
+your first wireless connection (typically wlan0 or eth1).
+This works on some networks, but most wireless networks will require
+that you specify a network name (SSID).
 
 <p>
-Now set up a schemes directory. I'm assuming that you have a
-currently working setup in /etc/network/interfaces and you're going
-to call this initial scheme "home".
-
+To set up your own custom schemes for places you go, create a file in
+your home directory called <b>.netscheme</b> containing entries like this:
 <pre>
-mkdir /etc/network/schemes
-cp /etc/network/interfaces /etc/network/schemes/interfaces-home
+[home]
+dhcp = false
+ip = 192.168.1.42
+netmask = 255.255.255.0
+broadcast = 192.168.1.255
+gateway = 192.168.1.1
+dns_servers = 192.168.1.1,192.168.1.2
+
+[coffeehouse]
+encryption = open
+essid = coffeehouse-wifi
+
+[work]
+encryption = wpa
+essid = MyWorkWPA
+key = secretpassword
 </pre>
 
 <p>
-You're almost done; now all you need is the scheme-switching script.
-It's a very simple shell script which you can get here:
-<br>
-<b><a href="/software/scripts/netscheme.py">netscheme.py</a></b>
-<br>
-There's also a simpler, older shell script version, for comparison:
-<a href="netscheme">netscheme</a>.
-<br>
-Take that script and name it /etc/network/schemes/netscheme and
-be sure that it's executable:
-<pre>
-chmod 755 /etc/network/schemes/netscheme
-</pre>
-<p>
-One more thing: you have to be root to run the netscheme script.
-If you use sudo, you might want to add it in the sudoers file to the
-list of programs you're allowed to run without a password.
-<p>
-If you can't remember what scheme you're in,
-running <code>netscheme</code> with no scheme name will
-tell you.
+DHCP is the default, but you can set it to false and use static addresses.
 
-<a name="newscheme">
-<h2>Writing new schemes</h2>
-<p>
-If you finished the steps in the previous section, you're all set
-with network schemes. But one network scheme isn't very useful!
-You need to make some more schemes so you can really use the system.
-<p>
-For each scheme, you need to create a file called
-<code>/etc/network/schemes/interfaces-<i>schemename</i></code>
-... don't forget the interfaces- part.
+<h3>Usage:</h3>
 
 <p>
-So how do you figure out what to put in the file?
-Obviously, it depends on your setup, but here are some typical
-interfaces files:
-
-<a name="static">
-<h3>Static IP on eth0</h3>
+<code>netscheme</code> with no arguments will try to figure out the
+current scheme. (For a wired scheme with no essid, it may not be sure.)
 <p>
-<pre>
-auto lo
-iface lo inet loopback
-
-auto eth0
-iface eth0 inet static
-address 192.168.1.24
-netmask 255.255.255.0
-broadcast 192.168.1.255
-gateway 192.168.1.1
-</pre>
+<code>netscheme schemename</code> will switch to that scheme.
 <p>
-Obviously, change the network numbers appropriately.
-
-<a name="wep">
-<h3>Wireless access on eth1 with an essid and a WEP key</h3>
-<p>
-<pre>
-auto lo
-iface lo inet loopback
-
-auto eth1
-iface eth1 inet dhcp
-wireless-essid network name
-wireless-key 6BF278D208
-</pre>
-<p>
-If your wireless is on wlan0 instead of eth1, use that instead.
-
-<a name="wpa">
-<h3>Wireless with WPA</h3>
-<p>
-WPA used to be really complicated, but under modern Debian and
-Ubuntu systems it's gotten simple. It looks like this:
-
-<pre>
-auto lo
-iface lo inet loopback
-
-auto eth1
-iface eth1 inet dhcp
-wpa-ssid the-essid
-wpa-psk the-password
-</pre>
+<code>netscheme essid</code> will try to connect to the given wireless
+network, and will ask whether you want to save that as a scheme for later.
 
 <p>
-For the password you can just use the user-readable password --
-you don't have to convert it to a hex code.
+<b>Options:</b><br>
+<table>
+<tr><td>--version           <td>show program's version number and exit
+<tr><td>-h, --help          <td>show this help message and exit
+<tr><td>-l, --list          <td>List the known schemes
+<tr><td>-a, --accesspoints  <td>List available accesspoints
+<tr><td>-m, --multi         <td>Add a new interface without bringing down current one
+</table>
 
-<a name="hotpluggable">
-<h3>If your network card is PCMIA, Cardbus or other hot-pluggable design</h3>
+<a name="netutils">
+<h2>netutils.py: a Python module for handling networking</h2>
 <p>
-If your network card isn't always present on the system, you'll want
-to add this line right under the "auto" line (using eth0, eth1, wlan0
-or whatever is appropriate for the interface):
+netutils.py is the heart of netscheme. It consists primarily of
+wrappers around system utilities like <i>ifconfig</i>,
+<i>iwconfig</i>, <i>iwlist</i>, <i>route</i>, <i>modprobe</i> and so on,
+but it presents a much cleaner Python interface so you don't have to
+deal with those underlying details.
+<p>
+Download it: <a href="netutils-1.4.py">netutils-1.4.py</a>
+<p>
+Documentation for it (generated with pydoc) is available here:
+<a href="netutils-1.4.html">Python netutils.py networking module</a>.
+<p>
+If you have a wishlist for functions you'd like to see in
+netutils.py, or ways you think I should change the API, don't
+hesitate to <a href="/mailme.html">let me know!</a>
 
-<pre>
-allow-hotplug wlan0
-</pre>
+<h2>Ancient history</h2>
 <p>
-I think this applies to USB wi-fi as well, though I've never
-actually used one.
-<p>
-There's not much documentation on what <i>allow-hotplug</i> actually
-does. <code>man interfaces</code> (a fairly good man page, BTW)
-implies that ifup will refuse to bring up an interface unless
-<i>allow-hotplug</i> is set; but if the network is being started via
-<code>/etc/init.d/networking start</code> either way, why do different
-things happen depending on whether <i>allow-hotplug</i> is present?
-It's all very confusing, but take my word for it, you need
-<i>allow-hotplug</i> if you're using PCMCIA or Cardbus (or
-probably USB).
-
-<a name="schemenotes">
-<h3>Notes on scheme writing</h3>
-<p>
-It's important to have only one real network interface (not
-including lo) specified in the interface-schemename file,
-(if you're deliberately routing from one network interface
-to the other, then you probablyknow enough to be able to ignore
-that advice safely).
-<p>
-At least on my current system (Ubuntu Hardy), if I simultaneously
-leave up both eth0 (the built-in wired networking) and eth1 (the
-built-in wireless), then routing will get horribly confused
-even if one of the two is completely disconnected.
-<p>
-The only way I've found to fix this is
-<pre>
-ifconfig eth0 up
-ifconfig eth1 down
-</pre>
-to bring one interface up and one down. You'd think
-<code>ifup</code> and <code>ifdown</code> would do it, based on
-their very vague man pages, but in fact they don't do anything
-as far as I can tell. So the <code>netscheme</code> script
-starts out by marking all interfaces down, then bringing up
-any interfaces specified in the file.
-
-<p>
-This also means that if you want a scheme that specifies no
-networking at all, just make a scheme containing only the lo entry,
-and all other interfaces will be <code>ifconfig</code>ed
-<code>down</code>.
-
-<p>
-You may have noticed that all the schemes start with the entry for lo,
-the loopback device. I could make the netscheme script put that in
-automatically, but it seems easy enough to leave it in each scheme
-so I haven't bothered.
-
-<a name="auto">
-<h2>Automatic schemes</h2>
-<p>
-Sometimes you go to a cafe or a conference that doesn't have any
-complicated key or other information, but it does require you to
-specify the essid (the name of the wireless net). netscheme has a
-special case for that: if you type
-<pre>
-netscheme essid
-</pre>
-and there's no scheme already named essid, it will ask you
-if you want to make a new scheme. If you answer anything but n,
-it will change the scheme to the name you specified.
-<p>
-It doesn't currently save that as a new scheme, but you can always
-run it again if you return to the same network.
-
-<a name="resolv">
-<h2>Special DNS for specific schemes</h2>
-<p>
-Linux specifies DNS settings in the file <i>/etc/resolv.conf</i>
-<p>
-If you use a static IP address, then you won't get DNS information
-from the DHCP server. In that case, you'll probably want to create
-a resolv.conf for your setup, and save it as 
-<code>/etc/network/schemes/resolv.conf-<i>schemename</i></code>.
-It will be copied into place every time you switch to that scheme.
-<p>
-Occasionally, you may find a network that works okay except that it
-doesn't have proper DNS information. (This is fairly common in
-wrongly-configured motel wireless networks.) 
-If you can find some DNS settings that work (hint: sometimes your
-home or work settings will work, or sometimes the network number
-with a host id of 1 will work), save it as
-<code>resolv.conf-<i>schemename</i></code>.
-
-<h2>That's it!</h2>
-<p>
-That's really all you need to know - go forth and network!
-The rest of this howto is older
-information concerning details that were important to older systems.
-
-<a name="PPP_Local"></a>
-<h2>PPP + Local Net</h2>
-<p>
-For ages I wanted a simple way to set up PPP and ethernet at the
-same time, so that on
-trips, my husband and I could share a single PPP connection between our
-two laptops.&nbsp; We finally have it, and it turns out to be fairly
-simple!&nbsp; It doesn't matter whether the second connection is a
-network card, wireless, or ad-hoc wireless; they're interchangeable and
-all follow the principles outlined in the rest of this document.<br>
-<br>
-I'm not going to write up a full howto here, but there are a few
-important keys you need to know:<br>
-<br>
-First, on the gateway machine (the one that is going to run the modem
-connection), you need a network scheme that uses static IP addresses
-(we use the 192.168.1 network) and <span style="font-style: italic;">no
-gateway</span> entry.&nbsp; No gateway is very important; if you leave
-in your gateway line, then as soon as you activate the network, it will
-take over and leave your PPP connection dead.<br>
-<br>
-On the slave machine (the one not running the modem), set the gateway
-to be the local IP address (on the 192.168.1 net or whatever local
-network you're using) of the machine with the modem, and that should be
-all you need to do on that machine.<br>
-<br>
-Finally, on the gateway machine, you need iptables installed and
-configured.<br>
-<br>
-Once all these are in place, do these steps:<br>
-<ol>
-  <li>Start the PPP connection on the gateway.</li>
-  <li>Start local networking on both machines (order not important).</li>
-  <li>Verify that the machines can talk to each other locally, and that
-the gateway machine can still see the outside world through PPP).</li>
-  <li>Use iptables to turn on connection sharing, using <a
- href="http://linuxchix.org/pipermail/courses/2003-July/001290.html">this
-lesson from linuxchix</a> which explains it much better than I would.</li>
-  <li>If everything is working, then from the slave machine, scp
-/etc/resolv.conf from the gateway machine; or else set up a DNS server
-on the gateway machine.<br>
-  </li>
-</ol>
+For historical reasons I've left the
+<a href="/linux/networkSchemes-deb.html">Debian/Ubuntu-specific
+network schemes</a> page online. It includes some possibly helpful
+though also partly obsolete information about Debian's
+/etc/network/interfaces mechanism, and maybe even a bit of even more
+obsolete information about networking under old Redhat systems.
 
 <hr>
-<a href="index.html">Linux Links</a><br>
-<a href="../index.html">Shallow Sky Home</a><br>
+<a href="../">More software</a><br>
+<a href="/linux">Linux Links</a><br>
+<a href="/">Shallow Sky Home</a><br>
 </body>
 </html>
