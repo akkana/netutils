@@ -89,7 +89,7 @@ class NetScheme :
         # Don't save the interface, but the user might change it:
         #if self.interface :
         #    s += "interface = %s" % (self.interface)
-        s += "\n"
+        #s += "\n"
 
         return s
 
@@ -169,19 +169,20 @@ auto %s""" % (iface.name)
         iface.ifconfig_up()
 
         if self.encryption == "wep" or self.encryption == "open" :
-            # iwconfig doesn't work reliably unless you specify the
-            # MAC address of the accesspoint. Sometimes it works
-            # without that, but don't count on it.
+            # iwconfig doesn't work reliably on some systems unless you 
+            # specify the MAC address of the accesspoint.
+            # However, this code isn't working on Pangolin, not sure why,
+            # so don't require it.
             accesspoint = None
             if self.essid != '' :
                 aplist = netutils.get_accesspoints()
                 for ap in aplist :
                     if ap.essid == self.essid :
                         accesspoint = ap
-                if accesspoint == None :
-                    print "No accesspoint matching '%s' -- giving up" \
-                        % (self.essid)
-                    sys.exit(1)
+                # if accesspoint == None :
+                #     print "No accesspoint matching '%s' -- giving up" \
+                #         % (self.essid)
+                #     sys.exit(1)
 
             iwargs = ["iwconfig", iface.name ]
             if self.essid :
@@ -342,6 +343,7 @@ psk="%s"
                 if r.dest == 'default' or r.dest == '0.0.0.0' :
                     defaults.append(r)
                     print "Default route:", r
+            print "============"
             if len(defaults) > 1 :
                 wired_route = None
                 # Find the first wired route
@@ -365,6 +367,25 @@ psk="%s"
         #     #print >>fp, "post-up chattr -i /etc/resolv.conf"
 
 def is_debian() :
+    # Ubuntu 12.04 Precise Pangolin has broken Debian-style networking,
+    # so check whether we're running it:
+    try :
+        lsb = open("/etc/lsb-release")
+        is_ubuntu = False
+        release = 0
+        for line in lsb :
+            if line.startswith('DISTRIB_ID=Ubuntu') :
+                is_ubuntu = True
+            elif line.startswith('DISTRIB_RELEASE=') :
+                release = float(line[16:])
+        lsb.close()
+        if is_ubuntu :
+            if release >= 12.0 :
+                return False
+            return True
+    except :
+        pass
+
     return os.access("/etc/network/interfaces", os.R_OK)
 
 def print_current_scheme() :
