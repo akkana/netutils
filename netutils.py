@@ -1,15 +1,28 @@
 #! /usr/bin/env python
 #
-# Network utilities for Python.
-# Copyright 2010 by Akkana Peck akkana@shallowsky.com
+# Network utilities for Python, version 1.4.
+# Copyright 2010-2012 by Akkana Peck akkana@shallowsky.com
 # ... share and enjoy under the GPLv2 or (at your option) later.
 
 """netutils: a set of networking utilities for Python.
 Copyright 2010 by Akkana Peck <akkana@shallowsky.com>
  ... share and enjoy under the GPLv2 or (at your option) later.
 
-Provides classes and functions to allow finding a wireless interface,
-querying for accesspoints, or establishing a connection.
+Provides the following:
+
+Classes:
+  NetInterface: name, ip, broadcast, netmask, essid, encryption, wireless
+  AccessPoint : address, essid, encryption, quality, interface
+  Route : display or change network routing tables.
+
+Functions outside of classes:
+  get_interfaces(only_up=False): returns a list of all NetInterface.
+    If only_up, will only return the ones currently marked UP.
+  get_wireless_interfaces(): returns a list of wireless NetInterface.
+  get_accesspoints(): returns a list of visible AccessPoints.
+  ifdown_all(): take all interfaces down, killing any wpa_supplicant or dhcp
+  kill_by_name(namelist): Kill a any running processes that include any
+    of the names in namelist. Return a list of actual process names killed.
 """
 
 import os, subprocess, re, shutil
@@ -18,7 +31,9 @@ class NetInterface :
     """A network interface, like eth1 or wlan0."""
 
     def __init__(self, name) :
-        self.name = name
+        # Debian derivatives sometimes sneakily give names like wlan:avahi.
+        # We only want the part before the colon.
+        self.name = name.split(':')[0]
         self.ip = ''
         self.broadcast = ''
         self.netmask = ''
@@ -50,6 +65,19 @@ class NetInterface :
 
         return s
 
+    def reload(self) :
+        print "Calling reload"
+        fp = open("/sys/class/net/" + self.name + "/device/uevent")
+        # Another way to get this: ethtool -i self.name
+        line = fp.readline()
+        fp.close()
+        if line[0:7] == "DRIVER=" :
+            module = line[7:].strip()
+            print "Unloading", module, "module"
+            subprocess.call(["modprobe", "-r", module])
+            print "Re-loading", module, "module"
+            subprocess.call(["modprobe", module])
+
     def ifconfig_up(self) :
         """Mark the interface UP with ifconfig"""
         subprocess.call(["ifconfig", self.name, "up"])
@@ -57,12 +85,9 @@ class NetInterface :
     def ifconfig_down(self) :
         """Mark the interface DOWN with ifconfig"""
         subprocess.call(["ifconfig", self.name, "down"])
-
+        self.reload()
 
 class Connection :
-    """Make a connection. Subclass this with details of how the
-       connection will actually be made.
-    """
     def __init__(self, iface=None) :
         if iface :
             self.iface = iface
@@ -72,11 +97,6 @@ class Connection :
         self.essid = "unknown"
 
 class ManualConnection(Connection) :
-    """Make a connection by calling explicit programs like ifconfig,
-       iwconfig, wpasupplicant, etc. In theory should work on any
-       Linux machine, but some distros (especially Debian derivatives)
-       may not work well and may need their own connection type.
-    """
     def __init__(self, iface=None):
         Connection.__init__(self, iface)
   
@@ -101,6 +121,12 @@ class ManualConnection(Connection) :
         iwargs.append("off")
   
         subprocess.call(iwargs)
+
+        # Check whether we succeeded -- don't bother calling DHCP
+        # if we're not associated
+        if not self.check_associated(essid) :
+            print "Can't associate with %s" % essid
+            return
   
         try :
             # Debian uses different args for DHCP clients than anyone else
@@ -117,15 +143,38 @@ class ManualConnection(Connection) :
             subprocess.call(["ifconfig", iface.name, "up"])
   
         self.essid = essid
+
+    def check_associated(self, essid) :
+        print "***** Checking whether we're associated with", essid
+        proc = subprocess.Popen("iwconfig", shell=True, stdout=subprocess.PIPE)
+        stdout_str = proc.communicate()[0]
+        stdout_list = stdout_str.split('\n')
+        ifaces = []
+        cur_essid = None
+        for line in stdout_list :
+            if 'ESSID' in line :
+                # look for ESSID:"name"
+                match = re.search('ESSID:"(.+)"', line)
+                if match :
+                    # If we're already looking at the desired essid,
+                    # then we're done. We must be associated.
+                    if cur_essid == essid :
+                        print "Switched from", cur_essid, "to", match.group(1)
+                        return True
+                    cur_essid = match.group(1)
+                    print "Looking at entry for", cur_essid
+            if cur_essid == essid and 'Not-Associated' in line :
+                print "It's Not-Associated"
+                return False
+
+        print "Didn't see a Not-Associated"
+        return True
   
     def reset(self):
         print "Sorry, manual reset isn't defined yet! Please implement me!"
         self.essid = None
 
 class DebianConnection(Connection) :
-    """Make a connection on a Debian system, using /etc/network/interfaces
-       and service network restart (along with other helpers).
-    """
     def __init__(self, iface=None) :
         Connection.__init__(self, iface)
         self.interfaces = "/etc/network/interfaces"
@@ -194,7 +243,7 @@ wireless-essid %s
         self.essid = "unknown"
 
 class AccessPoint :
-    """ One Cell or wireless access point from iwlist output"""
+    """ One Cell or AccessPoint from iwlist output"""
 
     def __init__(self) :
         self.clear()
@@ -318,6 +367,7 @@ def get_interfaces(only_up=False, name=None) :
         ifcfg = 'ifconfig'
     else :
         ifcfg = '/sbin/ifconfig -a'
+        #ifcfg = 'cat /home/akkana/ifconfig.arch'
     proc = subprocess.Popen(ifcfg, shell=True, stdout=subprocess.PIPE)
     stdout_str = proc.communicate()[0]
     stdout_list = stdout_str.split('\n')
@@ -522,7 +572,7 @@ def get_accesspoints() :
 def ifdown_all() :
     """Take all current interfaces down.
     """
-
+    print "ifdown_all"
     up_ifaces = get_interfaces(True)
 
     # Kill DHCP and wpa_supplicant.
@@ -545,7 +595,7 @@ def ifdown_all() :
     # The only way to fix it seems to be to unload and reload
     # the wireless card's module. If it's not a module ... oops.
     # First find the module:
-    if len(killed) >= 1 and len(up_ifaces) > 0 :
+    if len(up_ifaces) > 0 :    # and len(killed) >= 1
         # Get the first wireless one. Hope there's only one.
         iface = None
         for i in up_ifaces :
@@ -553,16 +603,7 @@ def ifdown_all() :
                 iface = i
                 break
         if iface :
-            fp = open("/sys/class/net/" + iface.name + "/device/uevent")
-            # Another way to get this: ethtool -i iface.name
-            line = fp.readline()
-            fp.close()
-            if line[0:7] == "DRIVER=" :
-                module = line[7:].strip()
-                print "Unloading", module, "module"
-                subprocess.call(["modprobe", "-r", module])
-                print "Re-loading", module, "module"
-                subprocess.call(["modprobe", module])
+            iface.reload()
         else :
             print "Confusion! Can't find the old wireless interface to reload"
 
