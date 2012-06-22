@@ -234,10 +234,14 @@ psk="%s"
             try :
                 subprocess.check_call(["dhcpcd", "-G", "-C", "resolv.conf",
                                        iface.name])
-                #subprocess.call(["dhclient", "-v", iface.name])
-            except subprocess.CalledProcessError, e :
-              print "DHCP failed, error", e.returncode
-              iface.ifconfig_down()
+            #except subprocess.CalledProcessError, e :
+            except Exception, e :
+                print "Couldn't run dhcpcd; trying dhclient"
+                try :
+                    subprocess.call(["dhclient", "-v", iface.name])
+                except Exception, e :
+                    print "DHCP failed, error", e.returncode
+                    iface.ifconfig_down()
 
         else :
             if not self.ip :
