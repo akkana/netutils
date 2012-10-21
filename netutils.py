@@ -488,6 +488,7 @@ def get_accesspoints() :
         if not wiface and iface.wireless :
             wiface = iface
     if not wiface :    # No wireless interface on this system
+        print "No wireless interface! Interfaces were", ifaces
         return None
     if not wiface.up :
         wiface.ifconfig_up()
