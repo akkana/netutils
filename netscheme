@@ -384,8 +384,8 @@ def is_debian() :
                 release = float(line[16:])
         lsb.close()
         if is_ubuntu :
-            if release >= 12.0 :
-                return False
+            #if release >= 12.0 :
+            #    return False
             return True
     except :
         pass
@@ -471,9 +471,15 @@ def find_and_set_scheme(newscheme, add=False) :
             if ans != 'y' and ans != 'Y' and ans != '':
                 sys.exit(1)
 
+            # Get the key, if relevant:
+            if ap.encryption and ap.encryption != "open" :
+                key = raw_input("Password: ")
+            else :
+                key = ''
+
             # Use the scheme
-            scheme = NetScheme(ap.essid, True, '', '', '', '',
-                               ap.encryption, ap.essid)
+            scheme = NetScheme(ap.essid, True, encryption=ap.encryption,
+                               essid=ap.essid, key=key)
             if ap.interface :
                 scheme.interface = ap.interface
             scheme.set_scheme()
