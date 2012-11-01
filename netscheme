@@ -373,6 +373,7 @@ psk="%s"
 def is_debian() :
     # Ubuntu 12.04 Precise Pangolin has broken Debian-style networking,
     # so check whether we're running it:
+    #return False
     try :
         lsb = open("/etc/lsb-release")
         is_ubuntu = False
@@ -424,6 +425,9 @@ def print_current_scheme() :
 
 def list_accesspoints(maxap=20) :
     aplist = netutils.get_accesspoints()
+
+    # Sort the list be ap.quality
+    aplist.sort(cmp=lambda x,y: cmp(y.quality, x.quality))
 
     print "Visible access points:"
     for ap in aplist :
