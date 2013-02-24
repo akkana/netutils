@@ -67,7 +67,13 @@ class NetInterface :
 
     def reload(self) :
         print "Calling reload"
-        fp = open("/sys/class/net/" + self.name + "/device/uevent")
+        try :
+            # Sometimes the device doesn't exist. I have no idea why.
+            fp = open("/sys/class/net/" + self.name + "/device/uevent")
+        except :
+            print "Couldn't open device /sys/class/net/" + self.name
+            sys.exit(0)
+
         # Another way to get this: ethtool -i self.name
         line = fp.readline()
         fp.close()
@@ -86,6 +92,7 @@ class NetInterface :
         """Mark the interface DOWN with ifconfig"""
         subprocess.call(["ifconfig", self.name, "down"])
         self.reload()
+        subprocess.call(["ifconfig", "-a"])
 
 class Connection :
     def __init__(self, iface=None) :
