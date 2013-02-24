@@ -289,8 +289,10 @@ psk="%s"
         # Are we on debian?
         is_deb = is_debian()
         if is_deb :
+            print "Using Debian-style networking"
             self.set_scheme_debian(iface, add)
         else :
+            print "Using standard (non-Debian) network commands"
             self.set_scheme_manual(iface, add)
 
         # Either way, update resolv.conf if applicable
@@ -371,9 +373,14 @@ psk="%s"
         #     #print >>fp, "post-up chattr -i /etc/resolv.conf"
 
 def is_debian() :
-    # Ubuntu 12.04 Precise Pangolin has broken Debian-style networking,
-    # so check whether we're running it:
-    #return False
+    # Lately, Debian networking has become so flaky and unmaintained
+    # that even though the standard networking commands sometimes
+    # don't work right on Debian/Ubuntu systems, they're still
+    # a better bet. The problem was first on Ubuntu 12.04 Precise Pangolin
+    # but with recent updates I'm even having problems on Debian Squeeze.
+    # So just forget about it unless someone decides to go back
+    # to maintaining it.
+    return False
     try :
         lsb = open("/etc/lsb-release")
         is_ubuntu = False
