@@ -14,6 +14,8 @@ Classes:
   NetInterface: name, ip, broadcast, netmask, essid, encryption, wireless
   AccessPoint : address, essid, encryption, quality, interface
   Route : display or change network routing tables.
+  There's also a Connection class but it's just experimental,
+  not currently used.
 
 Functions outside of classes:
   get_interfaces(only_up=False): returns a list of all NetInterface.
@@ -25,7 +27,7 @@ Functions outside of classes:
     of the names in namelist. Return a list of actual process names killed.
 """
 
-import os, subprocess, re, shutil
+import sys, os, subprocess, re, shutil
 
 class NetInterface :
     """A network interface, like eth1 or wlan0."""
@@ -70,11 +72,12 @@ class NetInterface :
         try :
             # Sometimes the device doesn't exist. I have no idea why.
             fp = open("/sys/class/net/" + self.name + "/device/uevent")
+            # Another way to get this: ethtool -i self.name
         except :
-            print "Couldn't open device /sys/class/net/" + self.name
-            sys.exit(0)
+            print "Not resetting: couldn't open device /sys/class/net/" \
+                + self.name
+            return
 
-        # Another way to get this: ethtool -i self.name
         line = fp.readline()
         fp.close()
         if line[0:7] == "DRIVER=" :
@@ -111,7 +114,8 @@ class ManualConnection(Connection) :
         """Connect to a particular essid doing all the steps manually.
            Pass essid=None to de-associate the interface from any essid.
         """
-        netutils.ifdown_all()
+        print "==== ManualConnection: connect", essid
+        ifdown_all()
   
         iface.ifconfig_up()
   
@@ -126,7 +130,8 @@ class ManualConnection(Connection) :
         iwargs.append("off")
         iwargs.append("enc")
         iwargs.append("off")
-  
+
+        print "==== Calling", iwargs
         subprocess.call(iwargs)
 
         # Check whether we succeeded -- don't bother calling DHCP

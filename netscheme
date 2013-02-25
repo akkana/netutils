@@ -168,7 +168,9 @@ auto %s""" % (iface.name)
         print "Calling ifconfig up"
         iface.ifconfig_up()
 
-        if self.encryption == "wep" or self.encryption == "open" :
+        if not iface.wireless :
+            pass
+        elif self.encryption == "wep" or self.encryption == "open" :
             # iwconfig doesn't work reliably on some systems unless you 
             # specify the MAC address of the accesspoint.
             # However, this code isn't working on Pangolin, not sure why,
@@ -203,7 +205,7 @@ auto %s""" % (iface.name)
                 #iwargs.append("off")
                 iwargs.append("channel")
                 iwargs.append("auto")
-            print "Calling", iwargs
+            print "===== Calling", iwargs
             subprocess.call(iwargs)
 
             print "Called iwconfig: now it says"
@@ -222,12 +224,29 @@ key_mgmt=WPA-PSK
 psk="%s"
 }""" % (self.essid, self.key)
             tempfp.close()
+            print "Calling wpa_supplicant -Dwext -i", iface.name, "-c", tempname
             subprocess.Popen(["wpa_supplicant", "wpa_supplicant",
                               "-Dwext", "-i", iface.name, "-c", tempname])
             # Is 1 second long enough for wpa_supplicant to open the file?
             # 2 might be safer. What a drag.
+            # Or maybe we shouldn't unlink it at all.
+            #time.sleep(2)
+            #os.unlink(tempname)
+
+        # Wait for a connection:
+        while iface.wireless :
+            proc = subprocess.Popen(["iwconfig", iface.name],
+                                    stdout=subprocess.PIPE)
+            line = proc.communicate()[0].split('\n')[0]
+            essidpos = line.find('ESSID:')
+            if essidpos >= 0 :
+                bound = line[essidpos+6:].strip().strip('"')
+                  # strip leading/trailing spaces first, then double quotes
+                if bound == self.essid :
+                    print "We made it! Bound to", self.essid
+                    break
+            print "Not bound to %s yet: '%s' (%s)" % (self.essid, bound, line)
             time.sleep(2)
-            os.unlink(tempname)
 
         if self.dhcp :
             print "Getting dhcp"
