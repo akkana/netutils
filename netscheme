@@ -471,21 +471,22 @@ def list_schemes() :
         print scheme.name
 
 def reset_current_scheme() :
-    cur_scheme_file = os.path.expanduser("~/.config/netscheme/current")
-    if os.access(cur_scheme_file, os.R_OK) :
-        fp = open(cur_scheme_file)
-        schemename = fp.readline().strip()
-        print "Resetting persistent scheme", schemename
-        find_and_set_scheme(schemename, add=False, make_persistent=False)
-
-    elif is_debian() :
+    # If we're using Debian networking, just reset whatever's
+    # currently in /etc/network/interfaces.
+    if is_debian() :
         subprocess.call(["service", "networking", "restart"])
+        return
 
-    else :
-        ifaces = netutils.get_interfaces(True)
-        netutils.ifdown_all()
-        for iface in ifaces :
-            subprocess.call(["ifconfig", iface, "up"])
+    # If not debian, reset the current scheme if there is one.
+    cur_scheme_file = os.path.expanduser("~/.config/netscheme/current")
+    if not os.access(cur_scheme_file, os.R_OK) :
+        print "No current netscheme"
+        return
+
+    fp = open(cur_scheme_file)
+    schemename = fp.readline().strip()
+    print "Resetting persistent scheme", schemename
+    find_and_set_scheme(schemename, add=False, make_persistent=False)
 
 def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
     for scheme in Schemes :
