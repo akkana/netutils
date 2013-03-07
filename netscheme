@@ -471,21 +471,45 @@ def list_schemes() :
         print scheme.name
 
 def reset_current_scheme() :
-    print "Sorry, resetting is unreliable right now"
-    if is_debian() :
+    cur_scheme_file = os.path.expanduser("~/.config/netscheme/current")
+    if os.access(cur_scheme_file, os.R_OK) :
+        fp = open(cur_scheme_file)
+        schemename = fp.readline().strip()
+        print "Resetting persistent scheme", schemename
+        find_and_set_scheme(schemename, add=False, make_persistent=False)
+
+    elif is_debian() :
         subprocess.call(["service", "networking", "restart"])
+
     else :
         ifaces = netutils.get_interfaces(True)
         netutils.ifdown_all()
         for iface in ifaces :
             subprocess.call(["ifconfig", iface, "up"])
 
-def find_and_set_scheme(newscheme, add=False) :
+def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
     for scheme in Schemes :
         if scheme.name != newscheme :
             continue
+
         # Found it; scheme is a NetScheme object.
         scheme.set_scheme(add)
+
+        config_dir = os.path.expanduser("~/.config/netscheme")
+        current_file = os.path.join(config_dir, "current")
+
+        # If specified, make this the default scheme, used for netscheme -r
+        if make_persistent :
+            if not os.access(config_dir, os.W_OK) :
+                os.makedirs(config_dir)
+            fp = open(current_file, "w")
+            print >>fp, scheme.name
+            fp.close()
+
+        # Otherwise make sure there is no default scheme.
+        elif os.access(current_file, os.W_OK) :
+            os.remove(current_file)
+
         return
 
     # XXX TO DO: use python soundex module if available
@@ -556,6 +580,10 @@ if __name__ == "__main__" :
                           action="store_true", dest="reset_current_scheme",
                           default=False,
                           help="Reset the connection without changing scheme")
+        parser.add_option("-p", "--persistent",
+                          action="store_true", dest="make_persistent",
+                          default=False,
+                          help="Make this scheme persistent (used in netscheme -r)")
         parser.add_option("-m", "--multi",
                           action="store_true", dest="multi",
                           default=False,
@@ -607,6 +635,6 @@ if __name__ == "__main__" :
             #print parser.usage
             print_current_scheme()
         else :
-            find_and_set_scheme(args[0], options.multi)
+            find_and_set_scheme(args[0], options.multi, options.make_persistent)
     except KeyboardInterrupt :
         print "Interrupt"
