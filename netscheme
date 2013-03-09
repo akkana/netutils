@@ -6,6 +6,7 @@
 #
 
 import sys, os
+import pwd
 import subprocess
 import signal
 import re
@@ -496,14 +497,42 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
         # Found it; scheme is a NetScheme object.
         scheme.set_scheme(add)
 
-        config_dir = os.path.expanduser("~/.config/netscheme")
-        current_file = os.path.join(config_dir, "current")
+        config_dir = os.path.expanduser("~/.config")
+        netscheme_dir = os.path.join(config_dir, "netscheme")
+        current_file = os.path.join(netscheme_dir, "current")
 
         # If specified, make this the default scheme, used for netscheme -r
         if make_persistent :
-            if not os.access(config_dir, os.W_OK) :
-                os.makedirs(config_dir)
-            fp = open(current_file, "w")
+            if os.path.exists(current_file) :
+                # If the file is already there, assume it has the right
+                # ownership, and just rewrite the contents:
+                fp = open(current_file, "w")
+            else :
+                # If the file, or its two parent directories, don't exist,
+                # we have to create them, then chown them to the user
+                # (since we're running as root).
+                # Amazingly, there's no way under sudo python to get the
+                # real UID. But we can get the logged-in username,
+                # then get the UID from that:
+                sudo_user = os.getenv("SUDO_USER")
+                if sudo_user :
+                    pw = pwd.getpwnam(sudo_user)
+                    uid = pw.pw_uid
+                    print "Pre-sudo UID is", uid
+                else :
+                    uid = os.getuid()
+
+                if not os.path.exists(config_dir) :
+                    print "Making", config_dir
+                    os.mkdir(config_dir)
+                    os.chown(config_dir, uid, -1)
+                if not os.path.exists(netscheme_dir) :
+                    print "Making", netscheme_dir
+                    os.mkdir(netscheme_dir)
+                    os.chown(netscheme_dir, uid, -1)
+                fp = open(current_file, "w")
+                os.chown(current_file, uid, -1)
+
             print >>fp, scheme.name
             fp.close()
 
