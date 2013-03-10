@@ -89,13 +89,29 @@ class NetInterface :
 
     def ifconfig_up(self) :
         """Mark the interface UP with ifconfig"""
+
+        # Okay, I have no idea what's going on here.
+        # If I set an eth0 scheme (which works correctly),
+        # then later try to set a wlan0 WPA scheme,
+        # when we get here, all interfaces are properly down.
+        # ifconfig -a shows that.
+        # Then we call ifconfig wlan0 up,
+        # and immediately after that, another ifconfig -a
+        # shows that both wlan0 and eth0 have been marked up.
+        # How do we mark wlan0 up without bringing eth0 with it?
+        # Running ifconfig wlan0 up by hand doesn't do that.
+
+        print "Before calling ifconfig_up", self.name, ", ifconfig -a looks like:"
+        subprocess.call(["ifconfig", "-a"])
+        print "Calling ifconfig", self.name, "up"
         subprocess.call(["ifconfig", self.name, "up"])
+        print "After calling ifconfig up, ifconfig -a looks like:"
+        subprocess.call(["ifconfig", "-a"])
 
     def ifconfig_down(self) :
         """Mark the interface DOWN with ifconfig"""
         subprocess.call(["ifconfig", self.name, "down"])
         self.reload()
-        subprocess.call(["ifconfig", "-a"])
 
 class Connection :
     def __init__(self, iface=None) :
@@ -587,6 +603,7 @@ def ifdown_all() :
     """
     print "ifdown_all"
     up_ifaces = get_interfaces(True)
+    print "Taking up interfaces down:", up_ifaces
 
     # Kill DHCP and wpa_supplicant.
     # In theory apparently it's better to stop wpa_supplicant with

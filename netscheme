@@ -166,10 +166,10 @@ auto %s""" % (iface.name)
         if not add :
             netutils.ifdown_all()
 
-        print "Calling ifconfig up"
         iface.ifconfig_up()
 
         if not iface.wireless :
+            print "It's not wireless"
             pass
         elif self.encryption == "wep" or self.encryption == "open" :
             # iwconfig doesn't work reliably on some systems unless you 
@@ -287,7 +287,8 @@ psk="%s"
         # Figure out what interface we'll be using:
         iface = None
         all = netutils.get_interfaces()
-        # find the first wireless interface
+        # Find the first wireless interface if the scheme is wireless,
+        # else the first wired.
         for i in all :
             print "Trying interface", i.name
             if i.wireless: print i.name, "is wireless"
@@ -305,6 +306,7 @@ psk="%s"
         if not iface :
             print "Couldn't find an interface to set the scheme"
             return
+        print "Using interface", iface
 
         # Are we on debian?
         is_deb = is_debian()
@@ -361,9 +363,10 @@ psk="%s"
         # in particular, if more than one interface is up, make sure
         # there's no wifi default route blocking on on a wired interface.
         up_ifaces = netutils.get_interfaces(True)
+        print "Up interfaces now:", up_ifaces
         if len(up_ifaces) > 0 :
             rt = netutils.Route.read_route_table()
-            # print "Route table:", rt
+            print "Route table:", rt
             defaults = []
             for r in rt :
                 if r.dest == 'default' or r.dest == '0.0.0.0' :
@@ -536,9 +539,14 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
             print >>fp, scheme.name
             fp.close()
 
-        # Otherwise make sure there is no default scheme.
-        elif os.access(current_file, os.W_OK) :
-            os.remove(current_file)
+        # Otherwise, if there's a default scheme and it's different
+        # from the one we're switching to, clear it.
+        elif os.access(current_file, os.R_OK & os.W_OK) :
+            fp = open(current_file)
+            filescheme = fp.readline().strip()
+            fp.close()
+            if filescheme != newscheme :
+                os.remove(current_file)
 
         return
 
