@@ -500,7 +500,9 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
         # Found it; scheme is a NetScheme object.
         scheme.set_scheme(add)
 
-        config_dir = os.path.expanduser("~/.config")
+        sudo_user = os.getenv("SUDO_USER")
+        config_dir = os.path.expanduser('~' + sudo_user + '/.config')
+        # if sudo_user isn't set, this will be ~/.config
         netscheme_dir = os.path.join(config_dir, "netscheme")
         current_file = os.path.join(netscheme_dir, "current")
 
@@ -517,7 +519,6 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
                 # Amazingly, there's no way under sudo python to get the
                 # real UID. But we can get the logged-in username,
                 # then get the UID from that:
-                sudo_user = os.getenv("SUDO_USER")
                 if sudo_user :
                     pw = pwd.getpwnam(sudo_user)
                     uid = pw.pw_uid
@@ -526,11 +527,9 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
                     uid = os.getuid()
 
                 if not os.path.exists(config_dir) :
-                    print "Making", config_dir
                     os.mkdir(config_dir)
                     os.chown(config_dir, uid, -1)
                 if not os.path.exists(netscheme_dir) :
-                    print "Making", netscheme_dir
                     os.mkdir(netscheme_dir)
                     os.chown(netscheme_dir, uid, -1)
                 fp = open(current_file, "w")
@@ -542,6 +541,7 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
         # Otherwise, if there's a default scheme and it's different
         # from the one we're switching to, clear it.
         elif os.access(current_file, os.R_OK & os.W_OK) :
+            print "Removing persistent file", current_file
             fp = open(current_file)
             filescheme = fp.readline().strip()
             fp.close()
@@ -673,6 +673,7 @@ if __name__ == "__main__" :
             #print parser.usage
             print_current_scheme()
         else :
-            find_and_set_scheme(args[0], options.multi, options.make_persistent)
+            find_and_set_scheme(args[0], options.multi,
+                                make_persistent=options.make_persistent)
     except KeyboardInterrupt :
         print "Interrupt"
