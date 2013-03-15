@@ -243,9 +243,14 @@ psk="%s"
             if essidpos >= 0 :
                 bound = line[essidpos+6:].strip().strip('"')
                   # strip leading/trailing spaces first, then double quotes
-                if bound == self.essid :
-                    print "We made it! Bound to", self.essid
-                    break
+            appos = line.find('Access Point:')
+            if appos >= 0 :
+                ap = line[appos+13:].strip()
+
+            if bound == self.essid and ap != 'Not-Associated' :
+                print "We made it! Bound to", self.essid
+                break
+
             print "Not bound to %s yet: '%s' (%s)" % (self.essid, bound, line)
             time.sleep(2)
 
@@ -396,31 +401,30 @@ psk="%s"
         #     #print >>fp, "post-up chattr -i /etc/resolv.conf"
 
 def is_debian() :
-    # Lately, Debian networking has become so flaky and unmaintained
-    # that even though the standard networking commands sometimes
-    # don't work right on Debian/Ubuntu systems, they're still
-    # a better bet. The problem was first on Ubuntu 12.04 Precise Pangolin
-    # but with recent updates I'm even having problems on Debian Squeeze.
-    # So just forget about it unless someone decides to go back
-    # to maintaining it.
-    return False
+    # Strangely, the current status is that non-Debian networking
+    # works better on Debian Squeeze, but doesn't work at all on
+    # Ubuntu Pangolin. So on Ubuntu, we use debian, but on debian, we don't.
     try :
         lsb = open("/etc/lsb-release")
+        print "Opened lsb-release"
         is_ubuntu = False
         release = 0
         for line in lsb :
             if line.startswith('DISTRIB_ID=Ubuntu') :
                 is_ubuntu = True
-            elif line.startswith('DISTRIB_RELEASE=') :
-                release = float(line[16:])
+            # elif line.startswith('DISTRIB_RELEASE=') :
+            #     release = float(line[16:])
         lsb.close()
         if is_ubuntu :
-            #if release >= 12.0 :
-            #    return False
-            return True
+            print "Using Debian-style networking"
+        else :
+            print "Using standard networking, not Debian"
+        return is_ubuntu
     except :
-        pass
+        print "Problem reading lsb-release, not debian"
+        return False
 
+    # We should never get here.
     return os.access("/etc/network/interfaces", os.R_OK)
 
 def print_current_scheme() :
@@ -477,12 +481,16 @@ def list_schemes() :
 def reset_current_scheme() :
     # If we're using Debian networking, just reset whatever's
     # currently in /etc/network/interfaces.
-    if is_debian() :
+    # However, that's a no-op in Ubuntu Pangolin (sigh!),
+    # which currently is the only place we're actually using debian-style.
+    if False and is_debian() :
         subprocess.call(["service", "networking", "restart"])
         return
 
     # If not debian, reset the current scheme if there is one.
-    cur_scheme_file = os.path.expanduser("~/.config/netscheme/current")
+    sudo_user = os.getenv("SUDO_USER")
+    cur_scheme_file = os.path.expanduser('~' + sudo_user
+                                         + '/.config/netscheme/current')
     if not os.access(cur_scheme_file, os.R_OK) :
         print "No current netscheme"
         return
