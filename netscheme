@@ -236,22 +236,29 @@ psk="%s"
 
         # Wait for a connection:
         while iface.wireless :
+            bound = None
+            ap = None
             proc = subprocess.Popen(["iwconfig", iface.name],
                                     stdout=subprocess.PIPE)
-            line = proc.communicate()[0].split('\n')[0]
-            essidpos = line.find('ESSID:')
+            lines = proc.communicate()[0].split('\n')
+            essidpos = lines[0].find('ESSID:')
             if essidpos >= 0 :
-                bound = line[essidpos+6:].strip().strip('"')
+                bound = lines[0][essidpos+6:].strip().strip('"')
                   # strip leading/trailing spaces first, then double quotes
-            appos = line.find('Access Point:')
-            if appos >= 0 :
-                ap = line[appos+13:].strip()
 
-            if bound == self.essid and ap != 'Not-Associated' :
+            if bound == self.essid :
+                for line in lines[1:] :
+                    appos = line.find('Access Point:')
+                    if appos >= 0 :
+                        ap = line[appos+13:].strip()
+                        break
+
+            if bound and (bound == self.essid) \
+                    and ap and (not ap.startswith('Not-Associated')) :
                 print "We made it! Bound to", self.essid
                 break
 
-            print "Not bound to %s yet: '%s' (%s)" % (self.essid, bound, line)
+            print "Not bound to %s yet: '%s, %s'" % (self.essid, bound, ap)
             time.sleep(2)
 
         if self.dhcp :
@@ -549,11 +556,11 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
         # Otherwise, if there's a default scheme and it's different
         # from the one we're switching to, clear it.
         elif os.access(current_file, os.R_OK & os.W_OK) :
-            print "Removing persistent file", current_file
             fp = open(current_file)
             filescheme = fp.readline().strip()
             fp.close()
             if filescheme != newscheme :
+                print "Removing persistent file", current_file
                 os.remove(current_file)
 
         return
