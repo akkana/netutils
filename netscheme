@@ -193,9 +193,11 @@ auto %s""" % (iface.name)
                 iwargs.append(self.essid)
             iwargs.append("mode")
             iwargs.append("managed")
-            if accesspoint and accesspoint.address :
-                iwargs.append("ap")
-                iwargs.append(accesspoint.address)
+            # Don't specify the AP -- that can cause us to get bound
+            # to a bad AP just because it happened to be listed first.
+            # if accesspoint and accesspoint.address :
+            #     iwargs.append("ap")
+            #     iwargs.append(accesspoint.address)
             if self.key :
                 iwargs.append("key")
                 iwargs.append(self.key)
@@ -206,13 +208,13 @@ auto %s""" % (iface.name)
                 #iwargs.append("off")
                 iwargs.append("channel")
                 iwargs.append("auto")
-            print "===== Calling", iwargs
+            print "========= Calling", iwargs
             subprocess.call(iwargs)
 
             print "Called iwconfig: now it says"
             os.system("iwconfig")
 
-        elif self.encryption == "wpa" :
+        elif self.encryption.startswith("wpa") :
             tempfp = tempfile.NamedTemporaryFile(prefix="wpasup",
                                                  delete=False)
             tempname = tempfp.name
