@@ -193,13 +193,11 @@ auto %s""" % (iface.name)
                 iwargs.append(self.essid)
             iwargs.append("mode")
             iwargs.append("managed")
-            # Specifying accesspoint MAC sometimes causes more trouble
-            # than it solves, at sites with multiple APs.
-            # See if things work better without it:
-            #if accesspoint and accesspoint.address :
-            #    iwargs.append("ap")
-            #    iwargs.append(accesspoint.address)
-            #    #iwargs.append('00:05:9e:80:36:69')
+            # Don't specify the AP -- that can cause us to get bound
+            # to a bad AP just because it happened to be listed first.
+            # if accesspoint and accesspoint.address :
+            #     iwargs.append("ap")
+            #     iwargs.append(accesspoint.address)
             if self.key :
                 iwargs.append("key")
                 iwargs.append(self.key)
@@ -210,13 +208,13 @@ auto %s""" % (iface.name)
                 #iwargs.append("off")
                 iwargs.append("channel")
                 iwargs.append("auto")
-            print "===== Calling", iwargs
+            print "========= Calling", iwargs
             subprocess.call(iwargs)
 
             print "Called iwconfig: now it says"
             os.system("iwconfig")
 
-        elif self.encryption == "wpa" :
+        elif self.encryption.startswith("wpa") :
             tempfp = tempfile.NamedTemporaryFile(prefix="wpasup",
                                                  delete=False)
             tempname = tempfp.name
@@ -240,17 +238,29 @@ psk="%s"
 
         # Wait for a connection:
         while iface.wireless :
+            bound = None
+            ap = None
             proc = subprocess.Popen(["iwconfig", iface.name],
                                     stdout=subprocess.PIPE)
-            line = proc.communicate()[0].split('\n')[0]
-            essidpos = line.find('ESSID:')
+            lines = proc.communicate()[0].split('\n')
+            essidpos = lines[0].find('ESSID:')
             if essidpos >= 0 :
-                bound = line[essidpos+6:].strip().strip('"')
+                bound = lines[0][essidpos+6:].strip().strip('"')
                   # strip leading/trailing spaces first, then double quotes
-                if bound == self.essid :
-                    print "We made it! Bound to", self.essid
-                    break
-            print "Not bound to %s yet: '%s' (%s)" % (self.essid, bound, line)
+
+            if bound == self.essid :
+                for line in lines[1:] :
+                    appos = line.find('Access Point:')
+                    if appos >= 0 :
+                        ap = line[appos+13:].strip()
+                        break
+
+            if bound and (bound == self.essid) \
+                    and ap and (not ap.startswith('Not-Associated')) :
+                print "We made it! Bound to", self.essid
+                break
+
+            print "Not bound to %s yet: '%s, %s'" % (self.essid, bound, ap)
             time.sleep(2)
 
         if self.dhcp :
@@ -400,31 +410,30 @@ psk="%s"
         #     #print >>fp, "post-up chattr -i /etc/resolv.conf"
 
 def is_debian() :
-    # Lately, Debian networking has become so flaky and unmaintained
-    # that even though the standard networking commands sometimes
-    # don't work right on Debian/Ubuntu systems, they're still
-    # a better bet. The problem was first on Ubuntu 12.04 Precise Pangolin
-    # but with recent updates I'm even having problems on Debian Squeeze.
-    # So just forget about it unless someone decides to go back
-    # to maintaining it.
-    return False
+    # Strangely, the current status is that non-Debian networking
+    # works better on Debian Squeeze, but doesn't work at all on
+    # Ubuntu Pangolin. So on Ubuntu, we use debian, but on debian, we don't.
     try :
         lsb = open("/etc/lsb-release")
+        print "Opened lsb-release"
         is_ubuntu = False
         release = 0
         for line in lsb :
             if line.startswith('DISTRIB_ID=Ubuntu') :
                 is_ubuntu = True
-            elif line.startswith('DISTRIB_RELEASE=') :
-                release = float(line[16:])
+            # elif line.startswith('DISTRIB_RELEASE=') :
+            #     release = float(line[16:])
         lsb.close()
         if is_ubuntu :
-            #if release >= 12.0 :
-            #    return False
-            return True
+            print "Using Debian-style networking"
+        else :
+            print "Using standard networking, not Debian"
+        return is_ubuntu
     except :
-        pass
+        print "Problem reading lsb-release, not debian"
+        return False
 
+    # We should never get here.
     return os.access("/etc/network/interfaces", os.R_OK)
 
 def print_current_scheme() :
@@ -481,12 +490,16 @@ def list_schemes() :
 def reset_current_scheme() :
     # If we're using Debian networking, just reset whatever's
     # currently in /etc/network/interfaces.
-    if is_debian() :
+    # However, that's a no-op in Ubuntu Pangolin (sigh!),
+    # which currently is the only place we're actually using debian-style.
+    if False and is_debian() :
         subprocess.call(["service", "networking", "restart"])
         return
 
     # If not debian, reset the current scheme if there is one.
-    cur_scheme_file = os.path.expanduser("~/.config/netscheme/current")
+    sudo_user = os.getenv("SUDO_USER")
+    cur_scheme_file = os.path.expanduser('~' + sudo_user
+                                         + '/.config/netscheme/current')
     if not os.access(cur_scheme_file, os.R_OK) :
         print "No current netscheme"
         return
@@ -504,7 +517,9 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
         # Found it; scheme is a NetScheme object.
         scheme.set_scheme(add)
 
-        config_dir = os.path.expanduser("~/.config")
+        sudo_user = os.getenv("SUDO_USER")
+        config_dir = os.path.expanduser('~' + sudo_user + '/.config')
+        # if sudo_user isn't set, this will be ~/.config
         netscheme_dir = os.path.join(config_dir, "netscheme")
         current_file = os.path.join(netscheme_dir, "current")
 
@@ -521,7 +536,6 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
                 # Amazingly, there's no way under sudo python to get the
                 # real UID. But we can get the logged-in username,
                 # then get the UID from that:
-                sudo_user = os.getenv("SUDO_USER")
                 if sudo_user :
                     pw = pwd.getpwnam(sudo_user)
                     uid = pw.pw_uid
@@ -530,11 +544,9 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
                     uid = os.getuid()
 
                 if not os.path.exists(config_dir) :
-                    print "Making", config_dir
                     os.mkdir(config_dir)
                     os.chown(config_dir, uid, -1)
                 if not os.path.exists(netscheme_dir) :
-                    print "Making", netscheme_dir
                     os.mkdir(netscheme_dir)
                     os.chown(netscheme_dir, uid, -1)
                 fp = open(current_file, "w")
@@ -550,6 +562,7 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
             filescheme = fp.readline().strip()
             fp.close()
             if filescheme != newscheme :
+                print "Removing persistent file", current_file
                 os.remove(current_file)
 
         return
@@ -677,6 +690,7 @@ if __name__ == "__main__" :
             #print parser.usage
             print_current_scheme()
         else :
-            find_and_set_scheme(args[0], options.multi, options.make_persistent)
+            find_and_set_scheme(args[0], options.multi,
+                                make_persistent=options.make_persistent)
     except KeyboardInterrupt :
         print "Interrupt"
