@@ -193,9 +193,13 @@ auto %s""" % (iface.name)
                 iwargs.append(self.essid)
             iwargs.append("mode")
             iwargs.append("managed")
-            if accesspoint and accesspoint.address :
-                iwargs.append("ap")
-                iwargs.append(accesspoint.address)
+            # Specifying accesspoint MAC sometimes causes more trouble
+            # than it solves, at sites with multiple APs.
+            # See if things work better without it:
+            #if accesspoint and accesspoint.address :
+            #    iwargs.append("ap")
+            #    iwargs.append(accesspoint.address)
+            #    #iwargs.append('00:05:9e:80:36:69')
             if self.key :
                 iwargs.append("key")
                 iwargs.append(self.key)
