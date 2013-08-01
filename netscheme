@@ -94,13 +94,37 @@ class NetScheme :
 
         return s
 
+    @staticmethod
+    def schemedir(create=False) :
+        '''Return the name of the directory where we'll store the scheme
+           and current files.
+        '''
+        configdir = homedirfile(".config/netscheme")
+        if os.path.exists(configdir) :
+            return configdir
+
+        if create :
+            try :
+                os.makedirs(configdir)
+                return configdir
+            except :
+                print "Couldn't create", configdir, "-- using $HOME"
+
+        return homedirfile('')
+
+    @staticmethod
+    def schemefilename(create=False) :
+        '''Return the name of the file we'll use to store schemes.'''
+        configdir = NetScheme.schemedir(create)
+        return os.path.join(configdir, '.netscheme')
+
     def dump(self, filename=None) :
         print 'dump(', filename, ')'
         if filename == None :
-            filename = homedirfile(".netscheme")
-            print "Appending new scheme to", filename
-        print "Trying to append to", filename
+            filename = NetScheme.schemefilename(create=True)
+        print "Trying to write to", filename
         fp = open(filename, "a")
+        print >>fp, ''
         print >>fp, self
         fp.close()
 
@@ -658,10 +682,11 @@ if __name__ == "__main__" :
                                'encryption':'', 'essid':'', 'key':'',
                                'interface':'', 'dns_servers':''})
 
-        configfile = homedirfile(".netscheme")
-
+            
+        configfile = NetScheme.schemefilename()
+        print "Reading configurations from", configfile
         config.read(configfile)
-        #print "Reading from config", configfile
+
         for scheme in config.sections() :
             newscheme = NetScheme(name = scheme,
                                   dhcp = config.getboolean(scheme, 'dhcp'),
