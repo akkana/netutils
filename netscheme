@@ -17,20 +17,25 @@ from ConfigParser import ConfigParser
 
 import netutils
 
-# Get the homedir for the user running this script.
-# Unfortunately, if it's run under sudo, ~ and $HOME may expand to root
-# rather than to the actual user. This is a configurable sudo option
-# and varies randomly among distros.
-def homedirfile(fname) :
-    sudo_user = os.getenv("SUDO_USER")
-    if sudo_user :
-        home = os.path.expanduser("~" + sudo_user)
-    else :
-        home = os.path.expanduser("~")
-    if fname :
-        return os.path.join(home, fname)
-    else :
-        return home
+def pathsplit(path):
+    '''Split a path into all its components -- not just splitting off
+       the last like os.path.split.
+       If the path is absolute (starts with /) then the first
+       component will be /.
+    '''
+    p = []
+    while path :
+        print "About to split", path
+        newpath, last = os.path.split(path)
+        if newpath == '/':
+            if last:
+                p.insert(0, last)
+            p.insert(0, newpath)
+            break
+        print p, newpath, last
+        p.insert(0, last)
+        path = newpath
+    return p
 
 class NetScheme :
     """A network scheme, either wired or wireless.
@@ -98,24 +103,89 @@ class NetScheme :
     def schemedir(create=False) :
         '''Return the name of the directory where we'll store the scheme
            and current files.
+           If create is true, create the directory (and chown if needed)
+           if it doesn't already exist.
+           If create is a string, create and chown a file of that name
+           inside the directory,
         '''
-        configdir = homedirfile(".config/netscheme")
-        if os.path.exists(configdir) :
+        print "schemedir: create =", create
+
+        # Get the homedir for the user running this script.
+        # Unfortunately, if it's run under sudo, ~ and $HOME may expand to root
+        # rather than to the actual user. This is a configurable sudo option
+        # and varies randomly among distros.
+        sudo_user = os.getenv("SUDO_USER")
+        if sudo_user :
+            home = os.path.expanduser("~" + sudo_user)
+        else :
+            home = os.path.expanduser("~")
+
+        configdir = os.path.join(home, ".config/netscheme")
+
+        # If the directory already exists and we don't need to create
+        # a new file (just the directory itself), we're done.
+        if os.path.exists(configdir) and type(create) != str :
+            return configdir
+        if not create :
             return configdir
 
-        if create :
-            try :
-                os.makedirs(configdir)
-                return configdir
-            except :
-                print "Couldn't create", configdir, "-- using $HOME"
+        # Create was specified, and at least some components of the path
+        # don't exist and need to be created and possibly chowed.
+        # For that, we'll need to know the original user, before sudo.
+        if sudo_user :
+            pw = pwd.getpwnam(sudo_user)
+            uid = pw.pw_uid
+            print "Pre-sudo UID is", uid
+        else :
+            uid = os.getuid()
 
-        return homedirfile('')
+        # Get the part of the path inside the user's homedir.
+        # We don't want to create anything above the homedir level.
+        if not configdir.startswith(home):
+            print "Confusion! config dir %s isn't inside homedir %s" \
+                % (configdir, home)
+            return
+        insidehome = configdir[len(home)+1:]
+        pathcomp = pathsplit(insidehome)
+        homepath = home
+        try :
+            for comp in pathcomp :
+                homepath = os.path.join(homepath, comp)
+                if not os.path.exists(homepath) :
+                    print "Creating", homepath
+                    os.mkdir(homepath)
+                    if sudo_user:
+                        print "chowning", homepath
+                        os.chown(homepath, uid, -1)
+                    if homepath != configdir:
+                        print "Eek -- after creating, %s != %s" \
+                            % (homepath, configdir)
+
+        except :
+            print "Couldn't create", configdir, "-- using $HOME"
+            return home
+
+        # Now we've created and chowned the directory.
+        # Do we need to create+chown a file too?
+        if not create or not type(create) is str :
+            return configdir
+
+        filepath = os.path.join(configdir, create)
+        if not sudo_user :
+            # Python seems to have no way to create a file without opening it.
+            open(filepath, 'w').close()
+            print "chowning", homepath
+            os.chown(filepath, uid, -1)
+
+        return filepath
 
     @staticmethod
     def schemefilename(create=False) :
         '''Return the name of the file we'll use to store schemes.'''
-        configdir = NetScheme.schemedir(create)
+        if create :
+            configdir = NetScheme.schemedir(create='.netscheme')
+        else :
+            configdir = NetScheme.schemedir(create=False)
         return os.path.join(configdir, '.netscheme')
 
     def dump(self, filename=None) :
@@ -461,6 +531,14 @@ def is_debian() :
     return os.access("/etc/network/interfaces", os.R_OK)
 
 def print_current_scheme() :
+    try:
+        cur_fp = open(os.path.join(NetScheme.schemedir('current')))
+        current_from_file = cur_fp.read().strip()
+        cur_fp.close()
+        print "Expected scheme:", current_from_file
+    except:
+        current_from_file = None
+
     ifaces = netutils.get_interfaces()
     for iface in ifaces :
         if not iface.up :
@@ -489,6 +567,8 @@ def print_current_scheme() :
                 print "  IP:", iface.ip, "(dhcp)"
             else :
                 print "  IP:", iface.ip
+        if matchscheme and scheme.name != current_from_file :
+            print scheme.name, "didn't match expected scheme of", matchscheme
 
 def list_accesspoints(maxap=20) :
     aplist = netutils.get_accesspoints()
@@ -521,15 +601,14 @@ def reset_current_scheme() :
         return
 
     # If not debian, reset the current scheme if there is one.
-    sudo_user = os.getenv("SUDO_USER")
-    cur_scheme_file = os.path.expanduser('~' + sudo_user
-                                         + '/.config/netscheme/current')
+    cur_scheme_file = os.path.join(NetScheme.schemedir(), 'current')
     if not os.access(cur_scheme_file, os.R_OK) :
         print "No current netscheme"
         return
 
     fp = open(cur_scheme_file)
     schemename = fp.readline().strip()
+    fp.close()
     print "Resetting persistent scheme", schemename
     find_and_set_scheme(schemename, add=False, make_persistent=False)
 
@@ -541,41 +620,25 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
         # Found it; scheme is a NetScheme object.
         scheme.set_scheme(add)
 
-        sudo_user = os.getenv("SUDO_USER")
-        config_dir = os.path.expanduser('~' + sudo_user + '/.config')
-        # if sudo_user isn't set, this will be ~/.config
-        netscheme_dir = os.path.join(config_dir, "netscheme")
-        current_file = os.path.join(netscheme_dir, "current")
+        # Do we want NetScheme.schemedir to create the "current" file?
+        current_name = 'current'
+        if make_persistent :
+            createflag = current_name
+        else :
+            createflag = False
+        current_file = os.path.join(NetScheme.schemedir(create=createflag),
+                                    current_name)
 
         # If specified, make this the default scheme, used for netscheme -r
+        # The file should already have been created and chowned if needed.
         if make_persistent :
-            if os.path.exists(current_file) :
-                # If the file is already there, assume it has the right
-                # ownership, and just rewrite the contents:
-                fp = open(current_file, "w")
-            else :
-                # If the file, or its two parent directories, don't exist,
-                # we have to create them, then chown them to the user
-                # (since we're running as root).
-                # Amazingly, there's no way under sudo python to get the
-                # real UID. But we can get the logged-in username,
-                # then get the UID from that:
-                if sudo_user :
-                    pw = pwd.getpwnam(sudo_user)
-                    uid = pw.pw_uid
-                    print "Pre-sudo UID is", uid
-                else :
-                    uid = os.getuid()
+            if not os.path.exists(current_file) :
+                print "Eek, couldn't create", current_file
+                return
 
-                if not os.path.exists(config_dir) :
-                    os.mkdir(config_dir)
-                    os.chown(config_dir, uid, -1)
-                if not os.path.exists(netscheme_dir) :
-                    os.mkdir(netscheme_dir)
-                    os.chown(netscheme_dir, uid, -1)
-                fp = open(current_file, "w")
-                os.chown(current_file, uid, -1)
-
+            print "Remembering current scheme %s to %s" \
+                % (scheme.name, current_file)
+            fp = open(current_file, "w")
             print >>fp, scheme.name
             fp.close()
 
