@@ -100,15 +100,12 @@ class NetScheme :
         return s
 
     @staticmethod
-    def schemedir(create=False) :
-        '''Return the name of the directory where we'll store the scheme
-           and current files.
-           If create is true, create the directory (and chown if needed)
-           if it doesn't already exist.
-           If create is a string, create and chown a file of that name
-           inside the directory,
+    def schemedirfile(filename, create=False) :
+        '''Return the name of a file (.netscheme, current) in our config dir.
+           If create is true, create the directory and file
+           (and chown if needed) if it doesn't already exist.
         '''
-        print "schemedir: create =", create
+        print "schemedirfile", filename, ": create =", create
 
         # Get the homedir for the user running this script.
         # Unfortunately, if it's run under sudo, ~ and $HOME may expand to root
@@ -121,13 +118,17 @@ class NetScheme :
             home = os.path.expanduser("~")
 
         configdir = os.path.join(home, ".config/netscheme")
+        if filename :
+            configfile = os.path.join(configdir, filename)
+        else :
+            configfile = configdir
 
         # If the directory already exists and we don't need to create
         # a new file (just the directory itself), we're done.
         if os.path.exists(configdir) and type(create) != str :
-            return configdir
+            return configfile
         if not create :
-            return configdir
+            return configfile
 
         # Create was specified, and at least some components of the path
         # don't exist and need to be created and possibly chowed.
@@ -141,11 +142,11 @@ class NetScheme :
 
         # Get the part of the path inside the user's homedir.
         # We don't want to create anything above the homedir level.
-        if not configdir.startswith(home):
-            print "Confusion! config dir %s isn't inside homedir %s" \
-                % (configdir, home)
+        if not configfile.startswith(home):
+            print "Confusion! config file %s isn't inside homedir %s" \
+                % (configfile, home)
             return
-        insidehome = configdir[len(home)+1:]
+        insidehome = configfile[len(home)+1:]
         pathcomp = pathsplit(insidehome)
         homepath = home
         try :
@@ -157,41 +158,31 @@ class NetScheme :
                     if sudo_user:
                         print "chowning", homepath
                         os.chown(homepath, uid, -1)
-                    if homepath != configdir:
+                    if homepath != configfile :
                         print "Eek -- after creating, %s != %s" \
-                            % (homepath, configdir)
+                            % (homepath, configfile)
 
         except :
-            print "Couldn't create", configdir, "-- using $HOME"
+            print "Couldn't create", configfile, "-- using $HOME"
             return home
 
         # Now we've created and chowned the directory.
         # Do we need to create+chown a file too?
-        if not create or not type(create) is str :
-            return configdir
+        if not filename :
+            return configfile
 
-        filepath = os.path.join(configdir, create)
         if not sudo_user :
             # Python seems to have no way to create a file without opening it.
-            open(filepath, 'w').close()
+            open(configfile, 'w').close()
             print "chowning", homepath
-            os.chown(filepath, uid, -1)
+            os.chown(configfile, uid, -1)
 
-        return filepath
-
-    @staticmethod
-    def schemefilename(create=False) :
-        '''Return the name of the file we'll use to store schemes.'''
-        if create :
-            configdir = NetScheme.schemedir(create='.netscheme')
-        else :
-            configdir = NetScheme.schemedir(create=False)
-        return os.path.join(configdir, '.netscheme')
+        return configfile
 
     def dump(self, filename=None) :
         print 'dump(', filename, ')'
         if filename == None :
-            filename = NetScheme.schemefilename(create=True)
+            filename = NetScheme.schemedirfile('.netscheme', create=True)
         print "Trying to write to", filename
         fp = open(filename, "a")
         print >>fp, ''
@@ -532,7 +523,7 @@ def is_debian() :
 
 def print_current_scheme() :
     try:
-        cur_fp = open(os.path.join(NetScheme.schemedir('current')))
+        cur_fp = open(os.path.join(NetScheme.schemedirfile('current')))
         current_from_file = cur_fp.read().strip()
         cur_fp.close()
         print "Expected scheme:", current_from_file
@@ -601,7 +592,7 @@ def reset_current_scheme() :
         return
 
     # If not debian, reset the current scheme if there is one.
-    cur_scheme_file = os.path.join(NetScheme.schemedir(), 'current')
+    cur_scheme_file = os.path.join(NetScheme.schemedirfile('current'))
     if not os.access(cur_scheme_file, os.R_OK) :
         print "No current netscheme"
         return
@@ -620,18 +611,15 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
         # Found it; scheme is a NetScheme object.
         scheme.set_scheme(add)
 
-        # Do we want NetScheme.schemedir to create the "current" file?
-        current_name = 'current'
-        if make_persistent :
-            createflag = current_name
-        else :
-            createflag = False
-        current_file = os.path.join(NetScheme.schemedir(create=createflag),
-                                    current_name)
+        # Do we want NetScheme.schemedirfile to create the "current" file?
+        current_file = NetScheme.schemedirfile('current',
+                                               create=make_persistent)
 
         # If specified, make this the default scheme, used for netscheme -r
         # The file should already have been created and chowned if needed.
         if make_persistent :
+            # XXX Next test should be redundant -- hopefully we'll catch
+            # creation errors in schemedirfile().
             if not os.path.exists(current_file) :
                 print "Eek, couldn't create", current_file
                 return
@@ -682,7 +670,7 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
 
             ans = raw_input("Save this scheme for later? (y/N) ")
             if ans == 'y' or ans == 'Y' :
-                scheme.dump()
+                scheme.dump('current')
 
             return
 
@@ -746,7 +734,7 @@ if __name__ == "__main__" :
                                'interface':'', 'dns_servers':''})
 
             
-        configfile = NetScheme.schemefilename()
+        configfile = NetScheme.schemedirfile('.netscheme')
         print "Reading configurations from", configfile
         config.read(configfile)
 
@@ -766,6 +754,7 @@ if __name__ == "__main__" :
                                                                  .split(','))
             newscheme.interface = config.get(scheme, 'interface')
             Schemes.append(newscheme)
+            print "Read scheme of", newscheme.name
 
         # Schemes are read, options are read, time to do stuff.
         if (options.list_schemes) :
