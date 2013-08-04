@@ -179,18 +179,23 @@ class NetScheme :
 
         return configfile
 
-    def dump(self, filename=None) :
-        print 'dump(', filename, ')'
-        if filename == None :
-            filename = NetScheme.schemedirfile('.netscheme', create=True)
-        print "Trying to write to", filename
-        fp = open(filename, "a")
+    def save(self, filename=None) :
+        print 'Saving scheme to file ', filename
+        if filename :
+            filename = NetScheme.schemedirfile(filename, create=True)
+            print "Trying to write to", filename
+            fp = open(filename, "a")
+        else :
+            fp = sys.stdout
         print >>fp, ''
         print >>fp, self
-        fp.close()
+        if filename :
+            fp.close()
 
     def set_scheme_debian(self, iface, add) :
-        """Update /etc/network/interfaces with info for the current scheme"""
+        """Update /etc/network/interfaces with info for the current scheme.
+           If add is true, don't take down any existing interfaces first.
+        """
 
         if not add :
             # First take down any currently up interfaces,
@@ -246,7 +251,10 @@ auto %s""" % (iface.name)
         # Now we have /etc/network/interfaces.
 
     def set_scheme_manual(self, iface, add) :
-        """Update /etc/network/interfaces with info for the current scheme"""
+        """Set the network to use a particular scheme, without needing
+           /etc/network/interfaces or other Debian mechanisms.
+           If add is true, don't take down any existing interfaces first.
+        """
 
         if not add :
             netutils.ifdown_all()
@@ -381,6 +389,7 @@ psk="%s"
 
     def set_scheme(self, add=False) :
         """Make this scheme active on the current machine.
+           If add is true, don't take down any existing interfaces first.
         """
 
         # Figure out what interface we'll be using:
@@ -604,75 +613,81 @@ def reset_current_scheme() :
     find_and_set_scheme(schemename, add=False, make_persistent=False)
 
 def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
+    found = False
     for scheme in Schemes :
         if scheme.name != newscheme :
             continue
 
         # Found it; scheme is a NetScheme object.
         scheme.set_scheme(add)
-
-        # Do we want NetScheme.schemedirfile to create the "current" file?
-        current_file = NetScheme.schemedirfile('current',
-                                               create=make_persistent)
-
-        # If specified, make this the default scheme, used for netscheme -r
-        # The file should already have been created and chowned if needed.
-        if make_persistent :
-            # XXX Next test should be redundant -- hopefully we'll catch
-            # creation errors in schemedirfile().
-            if not os.path.exists(current_file) :
-                print "Eek, couldn't create", current_file
-                return
-
-            print "Remembering current scheme %s to %s" \
-                % (scheme.name, current_file)
-            fp = open(current_file, "w")
-            print >>fp, scheme.name
-            fp.close()
-
-        # Otherwise, if there's a default scheme and it's different
-        # from the one we're switching to, clear it.
-        elif os.access(current_file, os.R_OK & os.W_OK) :
-            fp = open(current_file)
-            filescheme = fp.readline().strip()
-            fp.close()
-            if filescheme != newscheme :
-                print "Removing persistent file", current_file
-                os.remove(current_file)
-
-        return
+        found = True
 
     # XXX TO DO: use python soundex module if available
     # to see if there's a similarly named scheme --
     # for instance, "Coffee Bean" instead of "coffeebean".
 
-    print "No scheme named", newscheme
+    if not found :
+        # Didn't find an existing scheme: make a new one.
+        print "No scheme named", newscheme
 
-    aplist = netutils.get_accesspoints()
-    for ap in aplist :
-        if ap.essid == newscheme :
-            ans = raw_input("Use it anyway? (Y/n) ")
-            if ans != 'y' and ans != 'Y' and ans != '':
-                sys.exit(1)
+        aplist = netutils.get_accesspoints()
+        for ap in aplist :
+            if ap.essid == newscheme :
+                ans = raw_input("Use it anyway? (Y/n) ")
+                if ans != 'y' and ans != 'Y' and ans != '':
+                    sys.exit(1)
 
-            # Get the key, if relevant:
-            if ap.encryption and ap.encryption != "open" :
-                key = raw_input("Password: ")
-            else :
-                key = ''
+                # Get the key, if relevant:
+                if ap.encryption and ap.encryption != "open" :
+                    key = raw_input("Password: ")
+                else :
+                    key = ''
 
-            # Use the scheme
-            scheme = NetScheme(ap.essid, True, encryption=ap.encryption,
-                               essid=ap.essid, key=key)
-            if ap.interface :
-                scheme.interface = ap.interface
-            scheme.set_scheme()
+                # Use the scheme
+                scheme = NetScheme(ap.essid, True, encryption=ap.encryption,
+                                   essid=ap.essid, key=key)
+                if ap.interface :
+                    scheme.interface = ap.interface
+                scheme.set_scheme()
 
-            ans = raw_input("Save this scheme for later? (y/N) ")
-            if ans == 'y' or ans == 'Y' :
-                scheme.dump('current')
+                ans = raw_input("Save this scheme for later? (y/N) ")
+                if ans == 'y' or ans == 'Y' :
+                    scheme.save('.netscheme')
 
+    # Whether we made a new scheme or used an old one,
+    # we need to deal with the "current" file,
+    # either updating or deleting it. Get its full pathname:
+    current_file = NetScheme.schemedirfile('current',
+                                           create=make_persistent)
+
+    # If specified, make this the default scheme, used for netscheme -r
+    # The file should already have been created and chowned if needed.
+    if make_persistent :
+        print "Trying to make this persistent"
+
+        # XXX Next test should be redundant -- hopefully we'll catch
+        # creation errors in schemedirfile().
+        if not os.path.exists(current_file) :
+            print "Eek, couldn't create", current_file
             return
+        else :
+            print current_file, "exists -- overwriting"
+
+        print "Remembering current scheme %s to %s" \
+            % (scheme.name, current_file)
+        fp = open(current_file, "w")
+        print >>fp, scheme.name
+        fp.close()
+
+    # Otherwise, if there's a default scheme and it's different
+    # from the one we're switching to, clear it.
+    elif os.access(current_file, os.R_OK & os.W_OK) :
+        fp = open(current_file)
+        filescheme = fp.readline().strip()
+        fp.close()
+        if filescheme != newscheme :
+            print "Removing persistent file", current_file
+            os.remove(current_file)
 
 #
 # A couple of default schemes:
@@ -754,7 +769,6 @@ if __name__ == "__main__" :
                                                                  .split(','))
             newscheme.interface = config.get(scheme, 'interface')
             Schemes.append(newscheme)
-            print "Read scheme of", newscheme.name
 
         # Schemes are read, options are read, time to do stuff.
         if (options.list_schemes) :
