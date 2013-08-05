@@ -70,32 +70,31 @@ class NetScheme :
             self.encryption = "open"
 
     def __repr__(self) :
-        s = "[%s]\n" % (self.name)
+        s = "[%s]" % (self.name)
         if self.dhcp :
-            s += "dhcp = true\n"
+            s += "\ndhcp = true"
         else :
-            s += "dhcp = false\n"
+            s += "\ndhcp = false"
         if self.essid :
-            s += "essid = %s\n" % (self.essid)
+            s += "\nessid = %s" % (self.essid)
         if self.ip :
-            s += "ip = %s\n" % (self.ip)
+            s += "\nip = %s" % (self.ip)
         if self.netmask :
-            s += "netmask = %s\n" % (self.netmask)
+            s += "\nnetmask = %s" % (self.netmask)
         if self.broadcast :
-            s += "broadcast = %s\n" % (self.broadcast)
+            s += "\nbroadcast = %s" % (self.broadcast)
         if self.gateway :
-            s += "gateway = %s\n" % (self.gateway)
+            s += "\ngateway = %s" % (self.gateway)
         if self.encryption :
-            s += "encryption = %s\n" % (self.encryption)
+            s += "\nencryption = %s" % (self.encryption)
         if self.key :
-            s += "key = %s\n" % (self.key)
+            s += "\nkey = %s" % (self.key)
         if self.dns_servers :
-            s += "dns_servers = %s\n" % (self.dns_servers)
+            s += "\ndns_servers = %s" % (self.dns_servers)
             # XXX Probably need to print the [ list ]
         # Don't save the interface, but the user might change it:
         #if self.interface :
-        #    s += "interface = %s" % (self.interface)
-        #s += "\n"
+        #    s += "\ninterface = %s" % (self.interface)
 
         return s
 
@@ -321,13 +320,24 @@ psk="%s"
 }""" % (self.essid, self.key)
             tempfp.close()
             print "Calling wpa_supplicant -Dwext -i", iface.name, "-c", tempname
-            subprocess.Popen(["wpa_supplicant", "wpa_supplicant",
-                              "-Dwext", "-i", iface.name, "-c", tempname])
-            # Is 1 second long enough for wpa_supplicant to open the file?
-            # 2 might be safer. What a drag.
-            # Or maybe we shouldn't unlink it at all.
-            #time.sleep(2)
-            #os.unlink(tempname)
+            # wpa_supplicant returns in case of error,
+            # but if it succeeds, we need it to keep running.
+            # So we can't use subprocess.call() assuming it will exit.
+            # Instead, use Popen(), wait for a second or two, and
+            # if it's still running, proceed as if things are okay.
+            # If wpa_supplicant exits with nonzero status, assume
+            # it's an error, print it and throw an exception
+            # so the user sees there's a problem (e.g. bad password).
+            supp = subprocess.Popen(["wpa_supplicant", "wpa_supplicant",
+                                     "-Dwext", "-i", iface.name,
+                                     "-c", tempname])
+            time.sleep(2)
+            supp.poll()
+            if supp.returncode :
+                print "ERROR! wpa_supplicant returned", supp.returncode
+                if supp.returncode == 255 :
+                    print "Maybe password is wrong?"
+                raise OSError
 
         # Wait for a connection:
         while iface.wireless :
@@ -781,7 +791,10 @@ if __name__ == "__main__" :
             #print parser.usage
             print_current_scheme()
         else :
-            find_and_set_scheme(args[0], options.multi,
-                                make_persistent=options.make_persistent)
+            try :
+                find_and_set_scheme(args[0], options.multi,
+                                    make_persistent=options.make_persistent)
+            except OSError :
+                print "Couldn't set scheme"
     except KeyboardInterrupt :
         print "Interrupt"
