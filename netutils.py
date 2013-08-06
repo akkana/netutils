@@ -101,12 +101,12 @@ class NetInterface :
         # How do we mark wlan0 up without bringing eth0 with it?
         # Running ifconfig wlan0 up by hand doesn't do that.
 
-        print "Before calling ifconfig_up", self.name, ", ifconfig -a looks like:"
-        subprocess.call(["ifconfig", "-a"])
+        #print "Before calling ifconfig_up", self.name, ", ifconfig -a looks like:"
+        #subprocess.call(["ifconfig", "-a"])
         print "Calling ifconfig", self.name, "up"
         subprocess.call(["ifconfig", self.name, "up"])
-        print "After calling ifconfig up, ifconfig -a looks like:"
-        subprocess.call(["ifconfig", "-a"])
+        #print "After calling ifconfig up, ifconfig -a looks like:"
+        #subprocess.call(["ifconfig", "-a"])
 
     def ifconfig_down(self) :
         """Mark the interface DOWN with ifconfig"""
