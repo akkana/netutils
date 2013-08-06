@@ -328,14 +328,12 @@ psk="%s"
             # If wpa_supplicant exits with nonzero status, assume
             # it's an error, print it and throw an exception
             # so the user sees there's a problem (e.g. bad password).
-            supp = subprocess.Popen(["wpa_supplicant", "wpa_supplicant",
-                                     "-Dwext", "-i", iface.name,
-                                     "-c", tempname])
-            time.sleep(2)
-            supp.poll()
-            if supp.returncode :
-                print "ERROR! wpa_supplicant returned", supp.returncode
-                if supp.returncode == 255 :
+            rv = subprocess.call(["wpa_supplicant", "wpa_supplicant",
+                                  "-B", "-Dwext", "-i", iface.name,
+                                  "-c", tempname])
+            if rv :
+                print "ERROR! wpa_supplicant returned", rv
+                if rv == 255 :
                     print "Maybe password is wrong?"
                 raise OSError
 
