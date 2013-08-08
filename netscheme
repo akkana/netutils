@@ -25,14 +25,12 @@ def pathsplit(path):
     '''
     p = []
     while path :
-        print "About to split", path
         newpath, last = os.path.split(path)
         if newpath == '/':
             if last:
                 p.insert(0, last)
             p.insert(0, newpath)
             break
-        print p, newpath, last
         p.insert(0, last)
         path = newpath
     return p
@@ -116,7 +114,7 @@ class NetScheme :
         else :
             home = os.path.expanduser("~")
 
-        configdir = os.path.join(home, ".config/netscheme")
+        configdir = os.path.join(home, ".config", "netscheme")
         if filename :
             configfile = os.path.join(configdir, filename)
         else :
@@ -124,9 +122,8 @@ class NetScheme :
 
         # If the directory already exists and we don't need to create
         # a new file (just the directory itself), we're done.
-        if os.path.exists(configdir) and type(create) != str :
-            return configfile
-        if not create :
+        if os.path.exists(configfile) or not create :
+            print "Don't need to create the file -- returning"
             return configfile
 
         # Create was specified, and at least some components of the path
@@ -135,18 +132,17 @@ class NetScheme :
         if sudo_user :
             pw = pwd.getpwnam(sudo_user)
             uid = pw.pw_uid
-            print "Pre-sudo UID is", uid
         else :
             uid = os.getuid()
 
         # Get the part of the path inside the user's homedir.
         # We don't want to create anything above the homedir level.
-        if not configfile.startswith(home):
-            print "Confusion! config file %s isn't inside homedir %s" \
-                % (configfile, home)
+        if not configdir.startswith(home) :
+            print "Confusion! config dir %s isn't inside homedir %s" \
+                % (configdir, home)
             return
-        insidehome = configfile[len(home)+1:]
-        pathcomp = pathsplit(insidehome)
+        reldir = configdir[len(home)+1:]
+        pathcomp = pathsplit(reldir)
         homepath = home
         try :
             for comp in pathcomp :
@@ -157,12 +153,12 @@ class NetScheme :
                     if sudo_user:
                         print "chowning", homepath
                         os.chown(homepath, uid, -1)
-                    if homepath != configfile :
+                    if homepath != configdir :
                         print "Eek -- after creating, %s != %s" \
                             % (homepath, configfile)
 
         except :
-            print "Couldn't create", configfile, "-- using $HOME"
+            print "Couldn't create", configdir, "-- using $HOME"
             return home
 
         # Now we've created and chowned the directory.
@@ -170,19 +166,21 @@ class NetScheme :
         if not filename :
             return configfile
 
-        if not sudo_user :
-            # Python seems to have no way to create a file without opening it.
-            open(configfile, 'w').close()
-            print "chowning", homepath
+        # Python seems to have no way to create a file without opening it.
+        open(configfile, 'w').close()
+        print "Created", configfile, "; sudo_user is", sudo_user
+        if sudo_user :
+            print "chowning", configfile
             os.chown(configfile, uid, -1)
+        else :
+            print "no sudo_user"
 
         return configfile
 
     def save(self, filename=None) :
-        print 'Saving scheme to file ', filename
         if filename :
             filename = NetScheme.schemedirfile(filename, create=True)
-            print "Trying to write to", filename
+            print "Trying to write scheme to", filename
             fp = open(filename, "a")
         else :
             fp = sys.stdout
@@ -319,7 +317,8 @@ key_mgmt=WPA-PSK
 psk="%s"
 }""" % (self.essid, self.key)
             tempfp.close()
-            print "Calling wpa_supplicant -Dwext -i", iface.name, "-c", tempname
+            print "Calling wpa_supplicant -B -Dwext -i", iface.name, \
+                "-c", tempname
             # wpa_supplicant returns in case of error,
             # but if it succeeds, we need it to keep running.
             # So we can't use subprocess.call() assuming it will exit.
@@ -557,10 +556,10 @@ def print_current_scheme() :
         matchscheme = None
         for scheme in Schemes :
             if iface.wireless and iface.essid == scheme.essid :
-                matchscheme = scheme
+                matchscheme = scheme.name
                 break
             elif not iface.wireless and iface.ip == scheme.ip :
-                matchscheme = scheme
+                matchscheme = scheme.name
                 break
         if matchscheme :
             print "Netscheme", scheme.name
@@ -571,12 +570,14 @@ def print_current_scheme() :
             if iface.essid :
                 print "  ESSID:", iface.essid
         if iface.ip :
-            if matchscheme and matchscheme.dhcp :
+            if matchscheme and scheme.dhcp :
                 print "  IP:", iface.ip, "(dhcp)"
             else :
                 print "  IP:", iface.ip
-        if matchscheme and scheme.name != current_from_file :
-            print scheme.name, "didn't match expected scheme of", matchscheme
+        if matchscheme and current_from_file and \
+                scheme.name != current_from_file :
+            print scheme.name, "didn't match expected scheme of", \
+                current_from_file
 
 def list_accesspoints(maxap=20) :
     aplist = netutils.get_accesspoints()
