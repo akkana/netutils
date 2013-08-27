@@ -15,6 +15,9 @@ import tempfile
 import time
 from ConfigParser import ConfigParser
 
+# Only for debugging
+import traceback
+
 import netutils
 
 def pathsplit(path):
@@ -261,107 +264,126 @@ auto %s""" % (iface.name)
         if not iface.wireless :
             print "It's not wireless"
             pass
-        elif self.encryption == "wep" or self.encryption == "open" :
-            # iwconfig doesn't work reliably on some systems unless you 
-            # specify the MAC address of the accesspoint.
-            # However, this code isn't working on Pangolin, not sure why,
-            # so don't require it.
-            accesspoint = None
-            if self.essid != '' :
-                aplist = netutils.get_accesspoints()
-                for ap in aplist :
-                    if ap.essid == self.essid :
-                        accesspoint = ap
-                # if accesspoint == None :
-                #     print "No accesspoint matching '%s' -- giving up" \
-                #         % (self.essid)
-                #     sys.exit(1)
 
-            iwargs = ["iwconfig", iface.name ]
-            if self.essid :
-                iwargs.append("essid")
-                iwargs.append(self.essid)
-            iwargs.append("mode")
-            iwargs.append("managed")
-            # Don't specify the AP -- that can cause us to get bound
-            # to a bad AP just because it happened to be listed first.
-            # if accesspoint and accesspoint.address :
-            #     iwargs.append("ap")
-            #     iwargs.append(accesspoint.address)
-            if self.key :
-                iwargs.append("key")
-                iwargs.append(self.key)
-            else :
-                iwargs.append("key")
-                iwargs.append("off")
-                #iwargs.append("enc")
-                #iwargs.append("off")
-                iwargs.append("channel")
-                iwargs.append("auto")
-            print "========= Calling", iwargs
-            subprocess.call(iwargs)
+        else :
+            # If it is wireless, often we try to associate with an AP
+            # and it just doesn't work. We loop over that, but if we
+            # retry enough times and it still doesn't work, we may
+            # need to give up and start over again.
+            while True :
+                if self.encryption == "wep" or self.encryption == "open" :
+                    # iwconfig doesn't work reliably on some systems unless you 
+                    # specify the MAC address of the accesspoint.
+                    # However, this code isn't working on Pangolin, not sure why,
+                    # so don't require it.
+                    accesspoint = None
+                    if self.essid != '' :
+                        aplist = netutils.get_accesspoints()
+                        for ap in aplist :
+                            if ap.essid == self.essid :
+                                accesspoint = ap
+                        # if accesspoint == None :
+                        #     print "No accesspoint matching '%s' -- giving up" \
+                        #         % (self.essid)
+                        #     sys.exit(1)
 
-            print "Called iwconfig: now it says"
-            os.system("iwconfig")
+                    iwargs = ["iwconfig", iface.name ]
+                    if self.essid :
+                        iwargs.append("essid")
+                        iwargs.append(self.essid)
+                    iwargs.append("mode")
+                    iwargs.append("managed")
+                    # Don't specify the AP -- that can cause us to get bound
+                    # to a bad AP just because it happened to be listed first.
+                    # if accesspoint and accesspoint.address :
+                    #     iwargs.append("ap")
+                    #     iwargs.append(accesspoint.address)
+                    if self.key :
+                        iwargs.append("key")
+                        iwargs.append(self.key)
+                    else :
+                        iwargs.append("key")
+                        iwargs.append("off")
+                        #iwargs.append("enc")
+                        #iwargs.append("off")
+                        iwargs.append("channel")
+                        iwargs.append("auto")
+                    print "========= Calling", iwargs
+                    subprocess.call(iwargs)
 
-        elif self.encryption.startswith("wpa") :
-            tempfp = tempfile.NamedTemporaryFile(prefix="wpasup",
-                                                 delete=False)
-            tempname = tempfp.name
-            print "tempname =", tempname
-            print "ssid", self.essid, "key", self.key
-            print >>tempfp, """network={
+                    print "Called iwconfig: now it says"
+                    os.system("iwconfig")
+
+                elif self.encryption.startswith("wpa") :
+                    tempfp = tempfile.NamedTemporaryFile(prefix="wpasup",
+                                                         delete=False)
+                    tempname = tempfp.name
+                    print "tempname =", tempname
+                    print "ssid", self.essid, "key", self.key
+                    print >>tempfp, """network={
 ssid="%s"
 scan_ssid=1
 key_mgmt=WPA-PSK
 psk="%s"
 }""" % (self.essid, self.key)
-            tempfp.close()
-            print "Calling wpa_supplicant -B -Dwext -i", iface.name, \
-                "-c", tempname
-            # wpa_supplicant returns in case of error,
-            # but if it succeeds, we need it to keep running.
-            # So we can't use subprocess.call() assuming it will exit.
-            # Instead, use Popen(), wait for a second or two, and
-            # if it's still running, proceed as if things are okay.
-            # If wpa_supplicant exits with nonzero status, assume
-            # it's an error, print it and throw an exception
-            # so the user sees there's a problem (e.g. bad password).
-            rv = subprocess.call(["wpa_supplicant", "wpa_supplicant",
-                                  "-B", "-Dwext", "-i", iface.name,
-                                  "-c", tempname])
-            if rv :
-                print "ERROR! wpa_supplicant returned", rv
-                if rv == 255 :
-                    print "Maybe password is wrong?"
-                raise OSError
+                    tempfp.close()
+                    print "Calling wpa_supplicant -B -Dwext -i", iface.name, \
+                        "-c", tempname
+                    # wpa_supplicant returns in case of error,
+                    # but if it succeeds, we need it to keep running.
+                    # So we can't use subprocess.call() assuming it will exit.
+                    # Instead, use Popen(), wait for a second or two, and
+                    # if it's still running, proceed as if things are okay.
+                    # If wpa_supplicant exits with nonzero status, assume
+                    # it's an error, print it and throw an exception
+                    # so the user sees there's a problem (e.g. bad password).
+                    rv = subprocess.call(["wpa_supplicant", "wpa_supplicant",
+                                          "-B", "-Dwext", "-i", iface.name,
+                                          "-c", tempname])
+                    if rv :
+                        print "ERROR! wpa_supplicant returned", rv
+                        if rv == 255 :
+                            print "Maybe password is wrong?"
+                        raise OSError
 
-        # Wait for a connection:
-        while iface.wireless :
-            bound = None
-            ap = None
-            proc = subprocess.Popen(["iwconfig", iface.name],
-                                    stdout=subprocess.PIPE)
-            lines = proc.communicate()[0].split('\n')
-            essidpos = lines[0].find('ESSID:')
-            if essidpos >= 0 :
-                bound = lines[0][essidpos+6:].strip().strip('"')
-                  # strip leading/trailing spaces first, then double quotes
+                # If wireless, wait for a connection:
+                # If wireless, loop until bound == self.essid,
+                # at which point we'll break out of the loop.
+                # But only repeat this a few times, then give up
+                # and try associating again.
+                numtries = 5
+                while iface.wireless and numtries > 0 :
+                    bound = None
+                    ap = None
+                    proc = subprocess.Popen(["iwconfig", iface.name],
+                                            stdout=subprocess.PIPE)
+                    lines = proc.communicate()[0].split('\n')
+                    essidpos = lines[0].find('ESSID:')
+                    if essidpos >= 0 :
+                        bound = lines[0][essidpos+6:].strip().strip('"')
+                        # strip leading/trailing spaces first, then doublequotes
 
-            if bound == self.essid :
-                for line in lines[1:] :
-                    appos = line.find('Access Point:')
-                    if appos >= 0 :
-                        ap = line[appos+13:].strip()
+                    if bound == self.essid :
+                        for line in lines[1:] :
+                            appos = line.find('Access Point:')
+                            if appos >= 0 :
+                                ap = line[appos+13:].strip()
+                                break
+
+                    if bound and (bound == self.essid) \
+                            and ap and (not ap.startswith('Not-Associated')) :
+                        print "We made it! Bound to", self.essid
                         break
 
-            if bound and (bound == self.essid) \
-                    and ap and (not ap.startswith('Not-Associated')) :
-                print "We made it! Bound to", self.essid
-                break
-
-            print "Not bound to %s yet: '%s, %s'" % (self.essid, bound, ap)
-            time.sleep(2)
+                    print "Not bound to %s yet: '%s, %s'" % (self.essid,
+                                                             bound, ap)
+                    numtries -= 1
+                    time.sleep(2)
+                if numtries > 0 :
+                    break
+                else :
+                    print "Too many retries: restarting the connection"
+                continue
 
         if self.dhcp :
             print "Getting dhcp"
@@ -622,6 +644,10 @@ def reset_current_scheme() :
     find_and_set_scheme(schemename, add=False, make_persistent=False)
 
 def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
+    # Sometimes we seem to get called a second time. Why?
+    print "find_and_set_scheme call stack:"
+    traceback.print_stack()
+    
     found = False
     for scheme in Schemes :
         if scheme.name != newscheme :
