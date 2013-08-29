@@ -105,7 +105,6 @@ class NetScheme :
            If create is true, create the directory and file
            (and chown if needed) if it doesn't already exist.
         '''
-        print "schemedirfile", filename, ": create =", create
 
         # Get the homedir for the user running this script.
         # Unfortunately, if it's run under sudo, ~ and $HOME may expand to root
@@ -126,7 +125,7 @@ class NetScheme :
         # If the directory already exists and we don't need to create
         # a new file (just the directory itself), we're done.
         if os.path.exists(configfile) or not create :
-            print "Don't need to create the file -- returning"
+            # print "Don't need to create the file -- returning"
             return configfile
 
         # Create was specified, and at least some components of the path
@@ -374,6 +373,17 @@ psk="%s"
                             and ap and (not ap.startswith('Not-Associated')) :
                         print "We made it! Bound to", self.essid
                         break
+
+                    # It can happen that one of them is an old
+                    # ap to which we were previously bound, maybe
+                    # because we booted with a persistent scheme
+                    # that is no longer here.
+                    # Not sure what causes that; possibly a rogue wpasupplicant?
+                    elif not bound :
+                        print
+                        print "Eek! Ww're bound to some other essid,", bound
+                        print "Check for a rogue wpasupplicant or something."
+                        print
 
                     print "Not bound to %s yet: '%s, %s'" % (self.essid,
                                                              bound, ap)
