@@ -662,6 +662,7 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
         # Found it; scheme is a NetScheme object.
         scheme.set_scheme(add)
         found = True
+        break
 
     # XXX TO DO: use python soundex module if available
     # to see if there's a similarly named scheme --
