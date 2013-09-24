@@ -654,10 +654,6 @@ def reset_current_scheme() :
     find_and_set_scheme(schemename, add=False, make_persistent=False)
 
 def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
-    # Sometimes we seem to get called a second time. Why?
-    print "find_and_set_scheme call stack:"
-    traceback.print_stack()
-    
     found = False
     for scheme in Schemes :
         if scheme.name != newscheme :
@@ -678,6 +674,10 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
         aplist = netutils.get_accesspoints()
         for ap in aplist :
             if ap.essid == newscheme :
+                # Sometimes we seem to get called a second time. Why?
+                print "use it anyway call stack:"
+                traceback.print_stack()
+    
                 ans = raw_input("Use it anyway? (Y/n) ")
                 if ans != 'y' and ans != 'Y' and ans != '':
                     sys.exit(1)
@@ -695,9 +695,15 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
                     scheme.interface = ap.interface
                 scheme.set_scheme()
 
-                ans = raw_input("Save this scheme for later? (y/N) ")
+                if make_persistent :
+                    ans = 'y'
+                else :
+                    ans = raw_input("Save this scheme for later? (y/N) ")
                 if ans == 'y' or ans == 'Y' :
                     scheme.save('.netscheme')
+
+                # We've used a scheme, so don't continue looping through them.
+                break
 
     # Whether we made a new scheme or used an old one,
     # we need to deal with the "current" file,
