@@ -621,11 +621,19 @@ def list_accesspoints(maxap=20) :
     for ap in aplist :
         # Show mode if it's anything but Master -- e.g. Ad-hoc
         mode = ''
-        if ap.mode != 'Master' :
-            mode = ' (' + ap.mode + ')'
-        print "%-22s : %-10s %-10s %s" % (ap.essid,
-                                          ap.encryption,
-                                          mode, ap.quality)
+        if ap.mode and ap.mode != 'Master' :
+            mode = ' (%s)' % ap.mode
+
+        # Does it match a scheme we know about?
+        schemestr = ''
+        for scheme in Schemes :
+            if ap.essid and ap.essid == scheme.essid :
+                schemestr = '(%s)' % scheme.name
+
+        print "%-22s : %-10s %-10s %s %s" % (ap.essid,
+                                             ap.encryption,
+                                             mode, ap.quality,
+                                             schemestr)
         continue
 
 def list_schemes() :
