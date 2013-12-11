@@ -662,15 +662,26 @@ def reset_current_scheme() :
     find_and_set_scheme(schemename, add=False, make_persistent=False)
 
 def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
+    aplist = netutils.get_accesspoints()
+
     found = False
+
     for scheme in Schemes :
         if scheme.name != newscheme :
             continue
 
         # Found it; scheme is a NetScheme object.
-        scheme.set_scheme(add)
-        found = True
-        break
+        # But do we actually see the scheme available now?
+        for ap in aplist :
+            if ap.essid == scheme.essid :
+                found = True
+                break
+        if found :
+            scheme.set_scheme(add)
+            break
+        else :
+            print "Existing scheme %s with essid %s not avilable here." % \
+                (scheme.name, scheme.essid)
 
     # XXX TO DO: use python soundex module if available
     # to see if there's a similarly named scheme --
@@ -680,7 +691,6 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
         # Didn't find an existing scheme: make a new one.
         print "No scheme named", newscheme
 
-        aplist = netutils.get_accesspoints()
         for ap in aplist :
             if ap.essid == newscheme :
                 # Sometimes we seem to get called a second time. Why?
