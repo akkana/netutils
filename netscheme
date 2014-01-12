@@ -694,8 +694,7 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
         for ap in aplist :
             if ap.essid == newscheme :
                 # Sometimes we seem to get called a second time. Why?
-                print "use it anyway call stack:"
-                traceback.print_stack()
+                # traceback.print_stack()
     
                 ans = raw_input("Use it anyway? (Y/n) ")
                 if ans != 'y' and ans != 'Y' and ans != '':
