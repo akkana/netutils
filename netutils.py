@@ -14,8 +14,6 @@ Classes:
   NetInterface: name, ip, broadcast, netmask, essid, encryption, wireless
   AccessPoint : address, essid, encryption, quality, interface
   Route : display or change network routing tables.
-  There's also a Connection class but it's just experimental,
-  not currently used.
 
 Functions outside of classes:
   get_interfaces(only_up=False): returns a list of all NetInterface.
@@ -108,162 +106,30 @@ class NetInterface :
         subprocess.call(["ifconfig", self.name, "down"])
         self.reload()
 
-class Connection :
-    def __init__(self, iface=None) :
-        if iface :
-            self.iface = iface
-        else :
-            self.iface = get_first_wireless_interface().name
-
-        self.essid = "unknown"
-
-class ManualConnection(Connection) :
-    def __init__(self, iface=None):
-        Connection.__init__(self, iface)
-  
-    def connect(self, essid):
-        """Connect to a particular essid doing all the steps manually.
-           Pass essid=None to de-associate the interface from any essid.
-        """
-        print "==== ManualConnection: connect", essid
-        ifdown_all()
-  
-        iface.ifconfig_up()
-  
-        iwargs = ["iwconfig", iface.name ]
-        if essid :
-            iwargs.append("essid")
-            iwargs.append(essid)
-        #iwargs.append("mode")
-        #iwargs.append("managed")
-  
-        iwargs.append("key")
-        iwargs.append("off")
-        iwargs.append("enc")
-        iwargs.append("off")
-
-        print "==== Calling", iwargs
-        subprocess.call(iwargs)
-
-        # Check whether we succeeded -- don't bother calling DHCP
-        # if we're not associated
-        if not self.check_associated(essid) :
-            print "Can't associate with %s" % essid
-            return
-  
-        try :
-            # Debian uses different args for DHCP clients than anyone else
-            if os.access("/sbin/dhcpcd", os.R_OK):
-                subprocess.check_call(["dhcpcd", "-G", "-C", "resolv.conf",
-                                 iface.name])
-            else:
-                subprocess.check_call(["dhclient", iface.name])
-        except subprocess.CalledProcessError, e :
-            print "DHCP failed, error", e.returncode
-            iface.ifconfig_down()
-  
-            # Mark the interface up (and call ifup too, if applicable)
-            subprocess.call(["ifconfig", iface.name, "up"])
-  
-        self.essid = essid
-
-    def check_associated(self, essid) :
-        print "***** Checking whether we're associated with", essid
-        proc = subprocess.Popen("iwconfig", shell=True, stdout=subprocess.PIPE)
+    def check_associated(self) :
+        '''Are we associated with an ESSID? Return the essid name, or None.
+        '''
+        proc = subprocess.Popen("iwconfig %s" % self.name, shell=True,
+                                stdout=subprocess.PIPE)
         stdout_str = proc.communicate()[0]
         stdout_list = stdout_str.split('\n')
         ifaces = []
         cur_essid = None
         for line in stdout_list :
-            if 'ESSID' in line :
-                # look for ESSID:"name"
-                match = re.search('ESSID:"(.+)"', line)
-                if match :
-                    # If we're already looking at the desired essid,
-                    # then we're done. We must be associated.
-                    if cur_essid == essid :
-                        print "Switched from", cur_essid, "to", match.group(1)
-                        return True
-                    cur_essid = match.group(1)
-                    print "Looking at entry for", cur_essid
-            if cur_essid == essid and 'Not-Associated' in line :
-                print "It's Not-Associated"
-                return False
+            if 'Not-Associated' in line :
+                print "Not associated"
+                return None
+            match = re.search('ESSID:(.+)', line)
+            if match :
+                essid = match.group(1).strip('"')
+                if essid == 'off/any' :
+                    print "No ESSID: off/any"
+                    return None
+                print "Still associated with", essid
+                return essid
 
-        print "Didn't see a Not-Associated"
-        return True
-  
-    def reset(self):
-        print "Sorry, manual reset isn't defined yet! Please implement me!"
-        self.essid = None
-
-class DebianConnection(Connection) :
-    def __init__(self, iface=None) :
-        Connection.__init__(self, iface)
-        self.interfaces = "/etc/network/interfaces"
-        self.interfaces_bak = "/etc/network/interfaces.bak"
-
-        print "Initialized debian connection, iface = ", self.iface
-
-        # Save off the old /etc/network/interfaces,
-        # since we'll be replacing it:
-        try :
-          shutil.copy2(self.interfaces, self.interfaces_bak)
-        except :
-          print "Couldn't back up interfaces file"
-
-    # Debian doesn't work well with manual networking tools --
-    # DHCP, in particular, works a lot less reliably on Debian than
-    # on other distros unless it's called automatically from the
-    # networking service.
-    def connect(self, essid) :
-        """Connect to a particular essid using /etc/network/interfaces.
-           Pass essid=None to de-associate the interface from any essid.
-        """
-
-        # If we're connected when we start, try to zero out networking first.
-        if self.essid :
-            subprocess.call(["ifconfig", self.iface, "down"])
-            fp = open(self.interfaces, "w")
-            print >>fp, """auto lo
-iface lo inet loopback
-"""
-            fp.close()
-            self.essid = None
-            subprocess.call(["service", "networking", "restart"])
-
-        # Okay, now it's reset, so specify the new network:
-        subprocess.call(["ifconfig", self.iface, "down"])
-        subprocess.call(["ifdown", self.iface])
-        fp = open(self.interfaces, "w")
-        print >>fp, """auto lo
-iface lo inet loopback
-
-auto %s
-iface %s inet dhcp
-wireless-essid %s
-""" % (self.iface, self.iface, essid)
-        fp.close()
-
-        # Mark the interface up (and call ifup too, if applicable).
-        # The difference among all these isn't documented, and in theory
-        # you should be able to call just ifup, but empirically this is
-        # the most reliable sequence:
-        subprocess.call(["ifconfig", self.iface, "up"])
-        subprocess.call(["ifup", self.iface])
-        subprocess.call(["service", "networking", "restart"])
-
-        self.essid = essid
-
-    def reset(self ):
-        """Reset everything back to working the way it was before you started"""
-        subprocess.call(["service", "networking", "stop"])
-        shutil.copy2(self.interfaces_bak, self.interfaces)
-        subprocess.call(["ifconfig", self.iface, "up"])
-        subprocess.call(["ifup", self.iface])
-        subprocess.call(["service", "networking", "start"])
-
-        self.essid = "unknown"
+        print "Didn't see any association information"
+        return None
 
 class AccessPoint :
     """ One Cell or AccessPoint from iwlist output"""
