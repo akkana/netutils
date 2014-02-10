@@ -64,7 +64,7 @@ class NetScheme :
             self.dns_servers = None
         else :
             self.dns_servers = dns_servers
-        self.interface = None
+        self.iface = None
 
         # Sanity check: if there's an essid then encryption should be set
         if self.essid and not self.encryption :
@@ -191,7 +191,7 @@ class NetScheme :
         if filename :
             fp.close()
 
-    def set_scheme_debian(self, iface, add) :
+    def set_scheme_debian(self, add) :
         """Update /etc/network/interfaces with info for the current scheme.
            If add is true, don't take down any existing interfaces first.
         """
@@ -219,11 +219,11 @@ iface lo inet loopback"""
 
         # Write the entry for the new interface
         print >>fp, """
-auto %s""" % (iface.name)
+auto %s""" % (self.iface.name)
         if self.dhcp :
-            print >>fp, "iface %s inet dhcp" % (iface.name)
+            print >>fp, "iface %s inet dhcp" % (self.iface.name)
         else :
-            print >>fp, "iface %s inet static" % (iface.name)
+            print >>fp, "iface %s inet static" % (self.iface.name)
             if self.ip :
                 print >>fp, "address", self.ip
             if self.netmask :
@@ -249,7 +249,7 @@ auto %s""" % (iface.name)
         fp.close()
         # Now we have /etc/network/interfaces.
 
-    def set_scheme_manual(self, iface, add) :
+    def set_scheme_manual(self, add) :
         """Set the network to use a particular scheme, without needing
            /etc/network/interfaces or other Debian mechanisms.
            If add is true, don't take down any existing interfaces first.
@@ -258,9 +258,9 @@ auto %s""" % (iface.name)
         if not add :
             netutils.ifdown_all()
 
-        iface.ifconfig_up()
+        self.iface.ifconfig_up()
 
-        if not iface.wireless :
+        if not self.iface.wireless :
             print "It's not wireless"
             pass
 
@@ -286,7 +286,7 @@ auto %s""" % (iface.name)
                         #         % (self.essid)
                         #     sys.exit(1)
 
-                    iwargs = ["iwconfig", iface.name ]
+                    iwargs = ["iwconfig", self.iface.name ]
                     if self.essid :
                         iwargs.append("essid")
                         iwargs.append(self.essid)
@@ -326,7 +326,7 @@ key_mgmt=WPA-PSK
 psk="%s"
 }""" % (self.essid, self.key)
                     tempfp.close()
-                    print "Calling wpa_supplicant -B -Dwext -i", iface.name, \
+                    print "Calling wpa_supplicant -B -Dwext -i", self.iface.name, \
                         "-c", tempname
                     # wpa_supplicant returns in case of error,
                     # but if it succeeds, we need it to keep running.
@@ -337,7 +337,7 @@ psk="%s"
                     # it's an error, print it and throw an exception
                     # so the user sees there's a problem (e.g. bad password).
                     rv = subprocess.call(["wpa_supplicant", "wpa_supplicant",
-                                          "-B", "-Dwext", "-i", iface.name,
+                                          "-B", "-Dwext", "-i", self.iface.name,
                                           "-c", tempname])
                     if rv :
                         print "ERROR! wpa_supplicant returned", rv
@@ -351,10 +351,10 @@ psk="%s"
                 # But only repeat this a few times, then give up
                 # and try associating again.
                 numtries = 5
-                while iface.wireless and numtries > 0 :
+                while self.iface.wireless and numtries > 0 :
                     bound = None
                     ap = None
-                    proc = subprocess.Popen(["iwconfig", iface.name],
+                    proc = subprocess.Popen(["iwconfig", self.iface.name],
                                             stdout=subprocess.PIPE)
                     lines = proc.communicate()[0].split('\n')
                     essidpos = lines[0].find('ESSID:')
@@ -399,20 +399,20 @@ psk="%s"
             print "Getting dhcp"
             try :
                 subprocess.check_call(["dhcpcd", "-G", "-C", "resolv.conf",
-                                       iface.name])
+                                       self.iface.name])
             #except subprocess.CalledProcessError, e :
             except Exception, e :
                 print "Couldn't run dhcpcd; trying dhclient"
                 try :
-                    subprocess.call(["dhclient", "-v", iface.name])
+                    subprocess.call(["dhclient", "-v", self.iface.name])
                 except Exception, e :
                     print "DHCP failed, error", e.returncode
-                    iface.ifconfig_down()
+                    self.iface.ifconfig_down()
 
         else :
             if not self.ip :
                 print "Eek -- you need either dhcp or an IP address"
-            ifcargs = ["ifconfig", iface.name, self.ip]
+            ifcargs = ["ifconfig", self.iface.name, self.ip]
             if self.netmask :
                 ifcargs.append("netmask")
                 ifcargs.append(self.netmask)
@@ -421,7 +421,7 @@ psk="%s"
                 ifcargs.append(self.broadcast)
             subprocess.call(ifcargs)
             if self.gateway :
-                r = netutils.Route("default", self.gateway, iface.name)
+                r = netutils.Route("default", self.gateway, self.iface.name)
                 r.add()
                 #subprocess.call(["route", "add", "default", "gw",
                 #                 self.gateway])
@@ -432,7 +432,7 @@ psk="%s"
         """
 
         # Figure out what interface we'll be using:
-        iface = None
+        self.iface = None
         all = netutils.get_interfaces()
         # Find the first wireless interface if the scheme is wireless,
         # else the first wired.
@@ -448,21 +448,21 @@ psk="%s"
             if ((self.encryption and i.wireless) or \
                     (not self.encryption and not i.wireless)) \
                     and (not add or not i.up) :
-                iface = i
+                self.iface = i
                 break
-        if not iface :
+        if not self.iface :
             print "Couldn't find an interface to set the scheme"
             return
-        print "Using interface", iface
+        print "Using interface", self.iface
 
         # Are we on debian?
         is_deb = is_debian()
         if is_deb :
             print "Using Debian-style networking"
-            self.set_scheme_debian(iface, add)
+            self.set_scheme_debian(add)
         else :
             print "Using standard (non-Debian) network commands"
-            self.set_scheme_manual(iface, add)
+            self.set_scheme_manual(add)
 
         # Either way, update resolv.conf if applicable
         if self.dns_servers and len(self.dns_servers) > 0 :
@@ -491,7 +491,7 @@ psk="%s"
         #     pass
 
         # Mark the interface up (and call ifup too, if applicable)
-        subprocess.call(["ifconfig", iface.name, "up"])
+        subprocess.call(["ifconfig", self.iface.name, "up"])
 
         # This somehow ends up being the second time it's called.
         # So don't do that!
@@ -503,7 +503,7 @@ psk="%s"
             # And calling it the second time can fail (e.g. for Broadcom
             # BCM4313 where the driver needs to be reloaded before
             # each association).
-            #subprocess.call(["ifup", iface.name])
+            #subprocess.call(["ifup", self.iface.name])
             subprocess.call(["service", "networking", "restart"])
 
         # Try to make the routing tables sane:
@@ -541,6 +541,18 @@ psk="%s"
         #     os.chmod("/etc/resolv.conf", 0644)
         #     #print >>fp, "post-up chmod 644 /etc/resolv.conf"
         #     #print >>fp, "post-up chattr -i /etc/resolv.conf"
+
+    def watch(self) :
+        '''Monitor the connection, and reset it if it drops.
+        '''
+        if not self.iface :
+            return "Can't watch -- No interface set"
+        while True :
+            essid = self.iface.check_associated()
+            if not essid :
+                print "Looks like we've been dropped. Resetting ..."
+                self.set_scheme()
+            time.sleep(15)
 
 def is_debian() :
     # Strangely, the current status is that non-Debian networking
@@ -662,6 +674,7 @@ def reset_current_scheme() :
     find_and_set_scheme(schemename, add=False, make_persistent=False)
 
 def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
+                        
     aplist = netutils.get_accesspoints()
 
     found = False
@@ -758,6 +771,8 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
             print "Removing persistent file", current_file
             os.remove(current_file)
 
+    return scheme
+
 #
 # A couple of default schemes:
 #
@@ -798,6 +813,10 @@ if __name__ == "__main__" :
                           action="store_true", dest="make_persistent",
                           default=False,
                           help="Make this scheme persistent (used in netscheme -r)")
+        parser.add_option("-w", "--watch",
+                          action="store_true", dest="watch",
+                          default=False,
+                          help="Watch the interface and reset it if it drops")
         parser.add_option("-m", "--multi",
                           action="store_true", dest="multi",
                           default=False,
@@ -811,6 +830,7 @@ if __name__ == "__main__" :
         #                   help="Create a new scheme (temporary unless -s is also set)")
         (options, args) = parser.parse_args()
 
+        ###################################################
         # Read in a list of NetSchemes from the config file
         config = ConfigParser({'dhcp':False, 'ip':'',
                                'netmask':'', 'broadcast':'', 'gateway':'',
@@ -851,8 +871,12 @@ if __name__ == "__main__" :
             print_current_scheme()
         else :
             try :
-                find_and_set_scheme(args[0], options.multi,
-                                    make_persistent=options.make_persistent)
+                scheme = find_and_set_scheme(args[0], options.multi,
+                                       make_persistent=options.make_persistent)
+
+                if options.watch :
+                    scheme.watch()
+
             except OSError :
                 print "Couldn't set scheme"
     except KeyboardInterrupt :
