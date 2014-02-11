@@ -552,7 +552,9 @@ psk="%s"
             if not essid :
                 print "Looks like we've been dropped. Resetting ..."
                 self.set_scheme()
-            time.sleep(15)
+            #else :
+            #    print "ESSID is '%s'" % essid
+            time.sleep(20)
 
 def is_debian() :
     # Strangely, the current status is that non-Debian networking

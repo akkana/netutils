@@ -114,22 +114,18 @@ class NetInterface :
         stdout_str = proc.communicate()[0]
         stdout_list = stdout_str.split('\n')
         ifaces = []
-        cur_essid = None
+        essid = None
         for line in stdout_list :
             if 'Not-Associated' in line :
                 print "Not associated"
                 return None
-            match = re.search('ESSID:(.+)', line)
+            if 'ESSID:' not in line :
+                continue
+            match = re.search('ESSID:"(.+)"', line)
             if match :
                 essid = match.group(1).strip('"')
-                if essid == 'off/any' :
-                    print "No ESSID: off/any"
-                    return None
-                print "Still associated with", essid
-                return essid
 
-        print "Didn't see any association information"
-        return None
+        return essid
 
 class AccessPoint :
     """ One Cell or AccessPoint from iwlist output"""
