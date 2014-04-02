@@ -686,16 +686,22 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
             continue
 
         # Found it; scheme is a NetScheme object.
-        # But do we actually see the scheme available now?
+        # But do we actually see the scheme available now, if it's wireless?
+        if not scheme.essid :    # Not a wireless scheme, no need to search
+            scheme.set_scheme(add)
+            found = True
+            break
         for ap in aplist :
             if ap.essid == scheme.essid :
                 found = True
                 break
+        else :   
+            found = True
         if found :
             scheme.set_scheme(add)
             break
         else :
-            print "Existing scheme %s with essid %s not avilable here." % \
+            print "Existing scheme %s with essid %s not available here." % \
                 (scheme.name, scheme.essid)
 
     # XXX TO DO: use python soundex module if available
