@@ -14,6 +14,7 @@ import shutil
 import tempfile
 import time
 from ConfigParser import ConfigParser
+import socket    # for socket.gethostname()
 
 # Only for debugging
 import traceback
@@ -50,7 +51,12 @@ class NetScheme :
         self.name = name
         self.essid = essid
         self.dhcp = dhcp
-        self.ip = ip
+        if ip == 'host':
+            # Set the static IP for this scheme to the IP in /etc/hosts
+            # corresponding to our current hostname:
+            self.ip = NetScheme.get_ip_from_hostname()
+        else:
+            self.ip = ip
         self.netmask = netmask
         self.broadcast = broadcast
         self.gateway = gateway
@@ -69,6 +75,16 @@ class NetScheme :
         # Sanity check: if there's an essid then encryption should be set
         if self.essid and not self.encryption :
             self.encryption = "open"
+
+    @staticmethod
+    def get_ip_from_hostname():
+        hostname = socket.gethostname()
+        for line in open('/etc/hosts'):
+            groups = line.split()
+            if hostname in groups[1:]:
+                return groups[0]
+        return None
+    # XXX This should cache the result so it only has to be done once.
 
     def __repr__(self) :
         s = "[%s]" % (self.name)
