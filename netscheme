@@ -707,6 +707,11 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
             scheme.set_scheme(add)
             found = True
             break
+        # It's a wireless scheme. Did we see any accesspoints?
+        if not aplist:
+            print "No accesspoints visible."
+            found = False
+            sys.exit(1)
         for ap in aplist :
             if ap.essid == scheme.essid :
                 found = True
