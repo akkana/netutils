@@ -326,9 +326,6 @@ auto %s""" % (self.iface.name)
                     print "========= Calling", iwargs
                     subprocess.call(iwargs)
 
-                    print "Called iwconfig: now it says"
-                    os.system("iwconfig")
-
                 elif self.encryption.startswith("wpa") :
                     tempfp = tempfile.NamedTemporaryFile(prefix="wpasup",
                                                          delete=False)
@@ -693,7 +690,7 @@ def reset_current_scheme() :
     find_and_set_scheme(schemename, add=False, make_persistent=False)
 
 def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
-                        
+
     aplist = netutils.get_accesspoints()
 
     found = False

@@ -25,7 +25,7 @@ Functions outside of classes:
     of the names in namelist. Return a list of actual process names killed.
 """
 
-import sys, os, subprocess, re, shutil
+import sys, os, subprocess, re, shutil, time
 
 class NetInterface :
     """A network interface, like eth1 or wlan0."""
@@ -103,6 +103,12 @@ class NetInterface :
 
     def ifconfig_down(self) :
         """Mark the interface DOWN with ifconfig"""
+        # It is not enough to just mark it down -- networking
+        # will still try to use it if it has an IP address configured.
+        # So remove that too.
+        # Doing it through ifconfig doesn't seem to work, so use ip.
+        subprocess.call(["ip", "addr", "flush", "dev", self.name])
+        # and then mark it down with ifconfig.
         subprocess.call(["ifconfig", self.name, "down"])
         self.reload()
 
@@ -364,22 +370,22 @@ def get_accesspoints() :
     """Return a list of visible wireless accesspoints."""
 
     # We can only get accesspoints if a wifi interface is up.
-    wiface = None
+    newly_up = None
     ifaces = get_interfaces()
     for iface in ifaces :
-        if iface.wireless and iface.up :
-            wiface = iface
+        if iface.wireless :
+            if not iface.up :
+                iface.ifconfig_up()
+                # But wireless interfaces can't list accesspoints
+                # for a little while after being brought up:
+                time.sleep(5)
+                newly_up = iface
             break
-        if not wiface and iface.wireless :
-            wiface = iface
-    if not wiface :    # No wireless interface on this system
+
+    if not iface.wireless :    # No wireless interface on this system
         print "No wireless interface! Interfaces were", ifaces
         print "Is the interface's driver loaded?"
         return None
-    if not wiface.up :
-        wiface.ifconfig_up()
-    else :
-        wiface = None     # nothing to take down later
 
     proc = subprocess.Popen('iwlist scan 2>/dev/null',
                             shell=True, stdout=subprocess.PIPE)
@@ -450,9 +456,11 @@ def get_accesspoints() :
         if match :
             ap.quality = match.group(1)
 
-    # If we marked an interface up just for this, mark it down again:
-    if wiface :
-        wiface.ifconfig_down()
+    # If we marked an interface up just for this, mark it down again.
+    # But that means reloading the module again, so skip this for now.
+    # if newly_up :
+    #     print "Take the interface back down now"
+    #     newly_up.ifconfig_down()
 
     return aplist
 
