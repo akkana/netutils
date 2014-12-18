@@ -326,9 +326,6 @@ auto %s""" % (self.iface.name)
                     print "========= Calling", iwargs
                     subprocess.call(iwargs)
 
-                    print "Called iwconfig: now it says"
-                    os.system("iwconfig")
-
                 elif self.encryption.startswith("wpa") :
                     tempfp = tempfile.NamedTemporaryFile(prefix="wpasup",
                                                          delete=False)
@@ -642,6 +639,7 @@ def print_current_scheme() :
                 current_from_file
 
 def list_accesspoints(maxap=20) :
+    print "Scanning for available access points ..."
     aplist = netutils.get_accesspoints()
 
     # Sort the list be ap.quality
@@ -692,7 +690,7 @@ def reset_current_scheme() :
     find_and_set_scheme(schemename, add=False, make_persistent=False)
 
 def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
-                        
+
     aplist = netutils.get_accesspoints()
 
     found = False
@@ -763,7 +761,12 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
                     scheme.save('.netscheme')
 
                 # We've used a scheme, so don't continue looping through them.
+                found = True
                 break
+
+    if not found :
+        print "No scheme set"
+        return None
 
     # Whether we made a new scheme or used an old one,
     # we need to deal with the "current" file,
@@ -859,6 +862,10 @@ if __name__ == "__main__" :
         #                   help="Create a new scheme (temporary unless -s is also set)")
         (options, args) = parser.parse_args()
 
+        if (options.list_accesspoints) :
+            list_accesspoints()
+            sys.exit(0)
+
         ###################################################
         # Read in a list of NetSchemes from the config file
         config = ConfigParser({'dhcp':False, 'ip':'',
@@ -891,8 +898,6 @@ if __name__ == "__main__" :
         # Schemes are read, options are read, time to do stuff.
         if (options.list_schemes) :
             list_schemes()
-        elif (options.list_accesspoints) :
-            list_accesspoints()
         elif (options.reset_current_scheme) :
             reset_current_scheme()
         elif len(args) < 1 :
@@ -903,8 +908,13 @@ if __name__ == "__main__" :
                 scheme = find_and_set_scheme(args[0], options.multi,
                                        make_persistent=options.make_persistent)
 
+                # If "watch" is on, fork and watch the connection in the
+                # background, resetting it when necessary:
                 if options.watch :
-                    scheme.watch()
+                    if os.fork() :
+                        sys.exit(0)
+                    else:
+                        scheme.watch()
 
             except OSError :
                 print "Couldn't set scheme"
