@@ -691,6 +691,14 @@ def reset_current_scheme() :
 
 def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
 
+    # Whether we made a new scheme or used an old one,
+    # if there's a persistent scheme specified and the user has specified
+    # a different scheme, make sure we remove the "current" file first.
+    current_file = NetScheme.schemedirfile('current')
+    if os.path.exists(current_file) :
+        print "Removing old persistent scheme"
+        os.remove(current_file)
+
     aplist = netutils.get_accesspoints()
 
     found = False
@@ -751,14 +759,20 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
                                    essid=ap.essid, key=key)
                 if ap.interface :
                     scheme.interface = ap.interface
-                scheme.set_scheme()
 
+                # Save it (if requested) even before trying to set it,
+                # so if setting the scheme fails, the user doesn't have
+                # to keep typing 'y' and the password.
+                # XXX (Of course, if it's failing because the password is
+                # wrong, the only recourse is to edit the config file.)
                 if make_persistent :
                     ans = 'y'
                 else :
                     ans = raw_input("Save this scheme for later? (y/N) ")
                 if ans == 'y' or ans == 'Y' :
                     scheme.save('.netscheme')
+
+                scheme.set_scheme()
 
                 # We've used a scheme, so don't continue looping through them.
                 found = True
@@ -768,16 +782,12 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
         print "No scheme set"
         return None
 
-    # Whether we made a new scheme or used an old one,
-    # we need to deal with the "current" file,
-    # either updating or deleting it. Get its full pathname:
-    current_file = NetScheme.schemedirfile('current',
-                                           create=make_persistent)
-
     # If specified, make this the default scheme, used for netscheme -r
     # The file should already have been created and chowned if needed.
     if make_persistent :
         print "Trying to make this persistent"
+
+        current_file = NetScheme.schemedirfile('current', True)
 
         # XXX Next test should be redundant -- hopefully we'll catch
         # creation errors in schemedirfile().
