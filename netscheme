@@ -28,7 +28,7 @@ def pathsplit(path):
        component will be /.
     '''
     p = []
-    while path :
+    while path:
         newpath, last = os.path.split(path)
         if newpath == '/':
             if last:
@@ -39,7 +39,7 @@ def pathsplit(path):
         path = newpath
     return p
 
-class NetScheme :
+class NetScheme:
     """A network scheme, either wired or wireless.
        encryption=None means wired;
        wireless schemes will have encryption in ( "open", "wep", "wpa" )
@@ -47,7 +47,7 @@ class NetScheme :
     """
     def __init__(self, name, dhcp=True,
                  ip='', netmask='', broadcast='', gateway='',
-                 encryption='', essid='', key='', dns_servers='') :
+                 encryption='', essid='', key='', dns_servers=''):
         self.name = name
         self.essid = essid
         self.dhcp = dhcp
@@ -60,20 +60,20 @@ class NetScheme :
         self.netmask = netmask
         self.broadcast = broadcast
         self.gateway = gateway
-        if encryption :
+        if encryption:
             self.encryption = encryption.lower()
-        else :
+        else:
             self.encryption = None
         self.key = key
         if not dns_servers or dns_servers == '' or \
-                (len(dns_servers) == 1 and dns_servers[0] == '') :
+                (len(dns_servers) == 1 and dns_servers[0] == ''):
             self.dns_servers = None
-        else :
+        else:
             self.dns_servers = dns_servers
         self.iface = None
 
         # Sanity check: if there's an essid then encryption should be set
-        if self.essid and not self.encryption :
+        if self.essid and not self.encryption:
             self.encryption = "open"
 
     @staticmethod
@@ -86,37 +86,37 @@ class NetScheme :
         return None
     # XXX This should cache the result so it only has to be done once.
 
-    def __repr__(self) :
+    def __repr__(self):
         s = "[%s]" % (self.name)
-        if self.dhcp :
+        if self.dhcp:
             s += "\ndhcp = true"
-        else :
+        else:
             s += "\ndhcp = false"
-        if self.essid :
+        if self.essid:
             s += "\nessid = %s" % (self.essid)
-        if self.ip :
+        if self.ip:
             s += "\nip = %s" % (self.ip)
-        if self.netmask :
+        if self.netmask:
             s += "\nnetmask = %s" % (self.netmask)
-        if self.broadcast :
+        if self.broadcast:
             s += "\nbroadcast = %s" % (self.broadcast)
-        if self.gateway :
+        if self.gateway:
             s += "\ngateway = %s" % (self.gateway)
-        if self.encryption :
+        if self.encryption:
             s += "\nencryption = %s" % (self.encryption)
-        if self.key :
+        if self.key:
             s += "\nkey = %s" % (self.key)
-        if self.dns_servers :
+        if self.dns_servers:
             s += "\ndns_servers = %s" % (self.dns_servers)
             # XXX Probably need to print the [ list ]
         # Don't save the interface, but the user might change it:
-        #if self.interface :
+        #if self.interface:
         #    s += "\ninterface = %s" % (self.interface)
 
         return s
 
     @staticmethod
-    def schemedirfile(filename, create=False) :
+    def schemedirfile(filename, create=False):
         '''Return the name of a file (.netscheme, current) in our config dir.
            If create is true, create the directory and file
            (and chown if needed) if it doesn't already exist.
@@ -127,196 +127,196 @@ class NetScheme :
         # rather than to the actual user. This is a configurable sudo option
         # and varies randomly among distros.
         sudo_user = os.getenv("SUDO_USER")
-        if sudo_user :
+        if sudo_user:
             home = os.path.expanduser("~" + sudo_user)
-        else :
+        else:
             home = os.path.expanduser("~")
 
         configdir = os.path.join(home, ".config", "netscheme")
-        if filename :
+        if filename:
             configfile = os.path.join(configdir, filename)
-        else :
+        else:
             configfile = configdir
 
         # If the directory already exists and we don't need to create
         # a new file (just the directory itself), we're done.
-        if os.path.exists(configfile) or not create :
+        if os.path.exists(configfile) or not create:
             # print "Don't need to create the file -- returning"
             return configfile
 
         # Create was specified, and at least some components of the path
         # don't exist and need to be created and possibly chowed.
         # For that, we'll need to know the original user, before sudo.
-        if sudo_user :
+        if sudo_user:
             pw = pwd.getpwnam(sudo_user)
             uid = pw.pw_uid
-        else :
+        else:
             uid = os.getuid()
 
         # Get the part of the path inside the user's homedir.
         # We don't want to create anything above the homedir level.
-        if not configdir.startswith(home) :
+        if not configdir.startswith(home):
             print "Confusion! config dir %s isn't inside homedir %s" \
                 % (configdir, home)
             return
         reldir = configdir[len(home)+1:]
         pathcomp = pathsplit(reldir)
         homepath = home
-        try :
-            for comp in pathcomp :
+        try:
+            for comp in pathcomp:
                 homepath = os.path.join(homepath, comp)
-                if not os.path.exists(homepath) :
+                if not os.path.exists(homepath):
                     print "Creating", homepath
                     os.mkdir(homepath)
                     if sudo_user:
                         print "chowning", homepath
                         os.chown(homepath, uid, -1)
-                    if homepath != configdir :
+                    if homepath != configdir:
                         print "Eek -- after creating, %s != %s" \
                             % (homepath, configfile)
 
-        except :
+        except:
             print "Couldn't create", configdir, "-- using $HOME"
             return home
 
         # Now we've created and chowned the directory.
         # Do we need to create+chown a file too?
-        if not filename :
+        if not filename:
             return configfile
 
         # Python seems to have no way to create a file without opening it.
         open(configfile, 'w').close()
         print "Created", configfile, "; sudo_user is", sudo_user
-        if sudo_user :
+        if sudo_user:
             print "chowning", configfile
             os.chown(configfile, uid, -1)
-        else :
+        else:
             print "no sudo_user"
 
         return configfile
 
-    def save(self, filename=None) :
-        if filename :
+    def save(self, filename=None):
+        if filename:
             filename = NetScheme.schemedirfile(filename, create=True)
             print "Trying to write scheme to", filename
             fp = open(filename, "a")
-        else :
+        else:
             fp = sys.stdout
         print >>fp, ''
         print >>fp, self
-        if filename :
+        if filename:
             fp.close()
 
-    def set_scheme_debian(self, add) :
+    def set_scheme_debian(self, add):
         """Update /etc/network/interfaces with info for the current scheme.
            If add is true, don't take down any existing interfaces first.
         """
 
-        if not add :
+        if not add:
             # First take down any currently up interfaces,
             # or ifup will fail later
             up_ifaces = netutils.get_interfaces(True)
-            for i in up_ifaces :
+            for i in up_ifaces:
                 print "Taking", i, "down with ifdown"
                 i.ifconfig_down()
                 subprocess.call(["ifdown", i.name])
 
-        if add :
+        if add:
             mode = "a"
-        else :
+        else:
             mode = "w"
         fp = open("/etc/network/interfaces", mode)
 
         # If we're making a new /etc/network/interfaces,
         # make sure it includes loopback:
-        if not add :
+        if not add:
             print >>fp, """auto lo
 iface lo inet loopback"""
 
         # Write the entry for the new interface
         print >>fp, """
 auto %s""" % (self.iface.name)
-        if self.dhcp :
+        if self.dhcp:
             print >>fp, "iface %s inet dhcp" % (self.iface.name)
-        else :
+        else:
             print >>fp, "iface %s inet static" % (self.iface.name)
-            if self.ip :
+            if self.ip:
                 print >>fp, "address", self.ip
-            if self.netmask :
+            if self.netmask:
                 print >>fp, "netmask", self.netmask
-            if self.broadcast :
+            if self.broadcast:
                 print >>fp, "broadcast", self.broadcast
-            if self.gateway :
+            if self.gateway:
                 print >>fp, "gateway", self.gateway
 
         print "Encryption:", self.encryption
-        if self.encryption == "wpa" or self.encryption == "wpa2" :
-            if self.essid :
+        if self.encryption == "wpa" or self.encryption == "wpa2":
+            if self.essid:
                 print >>fp, "wpa-ssid", self.essid
-            if self.key :
+            if self.key:
                 print >>fp, "wpa-psk", self.key
 
-        else :
-            if self.essid :
+        else:
+            if self.essid:
                 print >>fp, "wireless-essid", self.essid
-            if self.key :
+            if self.key:
                 print >>fp, "wireless-key", self.key
 
         fp.close()
         # Now we have /etc/network/interfaces.
 
-    def set_scheme_manual(self, add) :
+    def set_scheme_manual(self, add):
         """Set the network to use a particular scheme, without needing
            /etc/network/interfaces or other Debian mechanisms.
            If add is true, don't take down any existing interfaces first.
         """
 
-        if not add :
+        if not add:
             netutils.ifdown_all()
 
         self.iface.ifconfig_up()
 
-        if not self.iface.wireless :
+        if not self.iface.wireless:
             print "It's not wireless"
             pass
 
-        else :
+        else:
             # If it is wireless, often we try to associate with an AP
             # and it just doesn't work. We loop over that, but if we
             # retry enough times and it still doesn't work, we may
             # need to give up and start over again.
-            while True :
-                if self.encryption == "wep" or self.encryption == "open" :
+            while True:
+                if self.encryption == "wep" or self.encryption == "open":
                     # iwconfig doesn't work reliably on some systems unless you 
                     # specify the MAC address of the accesspoint.
                     # However, this code isn't working on Pangolin, not sure why,
                     # so don't require it.
                     accesspoint = None
-                    if self.essid != '' :
+                    if self.essid != '':
                         aplist = netutils.get_accesspoints()
-                        for ap in aplist :
-                            if ap.essid == self.essid :
+                        for ap in aplist:
+                            if ap.essid == self.essid:
                                 accesspoint = ap
-                        # if accesspoint == None :
+                        # if accesspoint == None:
                         #     print "No accesspoint matching '%s' -- giving up" \
                         #         % (self.essid)
                         #     sys.exit(1)
 
                     iwargs = ["iwconfig", self.iface.name ]
-                    if self.essid :
+                    if self.essid:
                         iwargs.append("essid")
                         iwargs.append(self.essid)
                     iwargs.append("mode")
                     iwargs.append("managed")
                     # Don't specify the AP -- that can cause us to get bound
                     # to a bad AP just because it happened to be listed first.
-                    # if accesspoint and accesspoint.address :
+                    # if accesspoint and accesspoint.address:
                     #     iwargs.append("ap")
                     #     iwargs.append(accesspoint.address)
-                    if self.key :
+                    if self.key:
                         iwargs.append("key")
                         iwargs.append(self.key)
-                    else :
+                    else:
                         iwargs.append("key")
                         iwargs.append("off")
                         #iwargs.append("enc")
@@ -326,7 +326,7 @@ auto %s""" % (self.iface.name)
                     print "========= Calling", iwargs
                     subprocess.call(iwargs)
 
-                elif self.encryption.startswith("wpa") :
+                elif self.encryption.startswith("wpa"):
                     tempfp = tempfile.NamedTemporaryFile(prefix="wpasup",
                                                          delete=False)
                     tempname = tempfp.name
@@ -352,9 +352,9 @@ psk="%s"
                     rv = subprocess.call(["wpa_supplicant", "wpa_supplicant",
                                           "-B", "-Dwext", "-i", self.iface.name,
                                           "-c", tempname])
-                    if rv :
+                    if rv:
                         print "ERROR! wpa_supplicant returned", rv
-                        if rv == 255 :
+                        if rv == 255:
                             print "Maybe password is wrong?"
                         raise OSError
 
@@ -364,26 +364,26 @@ psk="%s"
                 # But only repeat this a few times, then give up
                 # and try associating again.
                 numtries = 5
-                while self.iface.wireless and numtries > 0 :
+                while self.iface.wireless and numtries > 0:
                     bound = None
                     ap = None
                     proc = subprocess.Popen(["iwconfig", self.iface.name],
                                             stdout=subprocess.PIPE)
                     lines = proc.communicate()[0].split('\n')
                     essidpos = lines[0].find('ESSID:')
-                    if essidpos >= 0 :
+                    if essidpos >= 0:
                         bound = lines[0][essidpos+6:].strip().strip('"')
                         # strip leading/trailing spaces first, then doublequotes
 
-                    if bound == self.essid :
-                        for line in lines[1:] :
+                    if bound == self.essid:
+                        for line in lines[1:]:
                             appos = line.find('Access Point:')
-                            if appos >= 0 :
+                            if appos >= 0:
                                 ap = line[appos+13:].strip()
                                 break
 
                     if bound and (bound == self.essid) \
-                            and ap and (not ap.startswith('Not-Associated')) :
+                            and ap and (not ap.startswith('Not-Associated')):
                         print "We made it! Bound to", self.essid
                         break
 
@@ -392,7 +392,7 @@ psk="%s"
                     # because we booted with a persistent scheme
                     # that is no longer here.
                     # Not sure what causes that; possibly a rogue wpasupplicant?
-                    elif not bound :
+                    elif not bound:
                         print
                         print "Eek! Ww're bound to some other essid,", bound
                         print "Check for a rogue wpasupplicant or something."
@@ -402,44 +402,44 @@ psk="%s"
                                                              bound, ap)
                     numtries -= 1
                     time.sleep(2)
-                if numtries > 0 :
+                if numtries > 0:
                     break
-                else :
+                else:
                     print "Too many retries: restarting the connection"
                 continue
 
-        if self.dhcp :
+        if self.dhcp:
             print "Getting dhcp"
-            try :
+            try:
                 subprocess.check_call(["dhcpcd", "-G", "-C", "resolv.conf",
                                        self.iface.name])
-            #except subprocess.CalledProcessError, e :
-            except Exception, e :
+            #except subprocess.CalledProcessError, e:
+            except Exception, e:
                 print "Couldn't run dhcpcd; trying dhclient"
-                try :
+                try:
                     subprocess.call(["dhclient", "-v", self.iface.name])
-                except Exception, e :
+                except Exception, e:
                     print "DHCP failed, error", e.returncode
                     self.iface.ifconfig_down()
 
-        else :
-            if not self.ip :
+        else:
+            if not self.ip:
                 print "Eek -- you need either dhcp or an IP address"
             ifcargs = ["ifconfig", self.iface.name, self.ip]
-            if self.netmask :
+            if self.netmask:
                 ifcargs.append("netmask")
                 ifcargs.append(self.netmask)
-            if self.broadcast :
+            if self.broadcast:
                 ifcargs.append("broadcast")
                 ifcargs.append(self.broadcast)
             subprocess.call(ifcargs)
-            if self.gateway :
+            if self.gateway:
                 r = netutils.Route("default", self.gateway, self.iface.name)
                 r.add()
                 #subprocess.call(["route", "add", "default", "gw",
                 #                 self.gateway])
 
-    def set_scheme(self, add=False) :
+    def set_scheme(self, add=False):
         """Make this scheme active on the current machine.
            If add is true, don't take down any existing interfaces first.
         """
@@ -449,7 +449,7 @@ psk="%s"
         all = netutils.get_interfaces()
         # Find the first wireless interface if the scheme is wireless,
         # else the first wired.
-        for i in all :
+        for i in all:
             print "Trying interface", i.name
             if i.wireless: print i.name, "is wireless"
             # The clause from hell. What this does is:
@@ -460,30 +460,30 @@ psk="%s"
             #   can't use any interface that's already up.
             if ((self.encryption and i.wireless) or \
                     (not self.encryption and not i.wireless)) \
-                    and (not add or not i.up) :
+                    and (not add or not i.up):
                 self.iface = i
                 break
-        if not self.iface :
+        if not self.iface:
             print "Couldn't find an interface to set the scheme"
             return
         print "Using interface", self.iface
 
         # Are we on debian?
         is_deb = is_debian()
-        if is_deb :
+        if is_deb:
             print "Using Debian-style networking"
             self.set_scheme_debian(add)
-        else :
+        else:
             print "Using standard (non-Debian) network commands"
             self.set_scheme_manual(add)
 
         # Either way, update resolv.conf if applicable
-        if self.dns_servers and len(self.dns_servers) > 0 :
-            if (add) :
+        if self.dns_servers and len(self.dns_servers) > 0:
+            if (add):
                 print "Warning: new DNS settings may override old ones"
                 print "DNS servers:", self.dns_servers, len(self.dns_servers)
             fp = open("/etc/resolv.conf", "w")
-            for serv in self.dns_servers :
+            for serv in self.dns_servers:
                 print >>fp, "nameserver", serv
             fp.close()
 
@@ -495,7 +495,7 @@ psk="%s"
         # So try to keep it from writing.
         # XXX Ugh! This is awful -- is there a real solution?
         # Happily, dhcpcd actually allows control over this!
-        # elif add :
+        # elif add:
         #     print "**** Trying to make resolv.conf unwritable"
         #     os.chmod("/etc/resolv.conf", 0444)
         #     os.system("chattr +i /etc/resolv.conf")
@@ -508,7 +508,7 @@ psk="%s"
 
         # This somehow ends up being the second time it's called.
         # So don't do that!
-        if is_deb :
+        if is_deb:
             # At one point I thought it was a good idea to call ifup
             # explicitly. But at least with some cards, ifup associates
             # with the accesspoint and calls DHCP -- all of which is
@@ -524,79 +524,79 @@ psk="%s"
         # there's no wifi default route blocking on on a wired interface.
         up_ifaces = netutils.get_interfaces(True)
         print "Up interfaces now:", up_ifaces
-        if len(up_ifaces) > 0 :
+        if len(up_ifaces) > 0:
             rt = netutils.Route.read_route_table()
             print "Route table:", rt
             defaults = []
-            for r in rt :
-                if r.dest == 'default' or r.dest == '0.0.0.0' :
+            for r in rt:
+                if r.dest == 'default' or r.dest == '0.0.0.0':
                     defaults.append(r)
                     print "Default route:", r
             print "============"
-            if len(defaults) > 1 :
+            if len(defaults) > 1:
                 wired_route = None
                 # Find the first wired route
-                for r in defaults :
-                    for iface in up_ifaces :
-                        if r.iface == iface.name and not iface.wireless :
+                for r in defaults:
+                    for iface in up_ifaces:
+                        if r.iface == iface.name and not iface.wireless:
                             wired_route = r
                             print "  Wired route:", r
                             break
-                if wired_route :
+                if wired_route:
                     print "Using default route", wired_route
-                    for r in defaults :
-                        if r != wired_route :
+                    for r in defaults:
+                        if r != wired_route:
                             print "Deleting route", r
                             r.delete()
-        # if add :
+        # if add:
         #     print "**** Making resolv.conf writable again"
         #     os.system("chattr -i /etc/resolv.conf")
         #     os.chmod("/etc/resolv.conf", 0644)
         #     #print >>fp, "post-up chmod 644 /etc/resolv.conf"
         #     #print >>fp, "post-up chattr -i /etc/resolv.conf"
 
-    def watch(self) :
+    def watch(self):
         '''Monitor the connection, and reset it if it drops.
         '''
-        if not self.iface :
+        if not self.iface:
             return "Can't watch -- No interface set"
-        while True :
+        while True:
             essid = self.iface.check_associated()
-            if not essid :
+            if not essid:
                 print "Looks like we've been dropped. Resetting ..."
                 self.set_scheme()
-            #else :
+            #else:
             #    print "ESSID is '%s'" % essid
             time.sleep(20)
 
-def is_debian() :
+def is_debian():
     # Strangely, the current status is that non-Debian networking
     # works better on Debian Squeeze, but doesn't work at all on
     # Ubuntu Pangolin. So on Ubuntu, we use debian, but on debian, we don't.
-    try :
+    try:
         lsb = open("/etc/lsb-release")
         print "Opened lsb-release"
         is_ubuntu = False
         release = 0
-        for line in lsb :
-            if line.startswith('DISTRIB_ID=Ubuntu') :
+        for line in lsb:
+            if line.startswith('DISTRIB_ID=Ubuntu'):
                 is_ubuntu = True
-            # elif line.startswith('DISTRIB_RELEASE=') :
+            # elif line.startswith('DISTRIB_RELEASE='):
             #     release = float(line[16:])
         lsb.close()
-        if is_ubuntu :
+        if is_ubuntu:
             print "Using Debian-style networking"
-        else :
+        else:
             print "Using standard networking, not Debian"
         return is_ubuntu
-    except :
+    except:
         print "Problem reading lsb-release, not debian"
         return False
 
     # We should never get here.
     return os.access("/etc/network/interfaces", os.R_OK)
 
-def print_current_scheme() :
+def print_current_scheme():
     try:
         cur_fp = open(os.path.join(NetScheme.schemedirfile('current')))
         current_from_file = cur_fp.read().strip()
@@ -606,39 +606,39 @@ def print_current_scheme() :
         current_from_file = None
 
     ifaces = netutils.get_interfaces()
-    for iface in ifaces :
-        if not iface.up :
+    for iface in ifaces:
+        if not iface.up:
             continue
 
         print iface.name, ":",
 
         matchscheme = None
-        for scheme in Schemes :
-            if iface.wireless and iface.essid == scheme.essid :
+        for scheme in Schemes:
+            if iface.wireless and iface.essid == scheme.essid:
                 matchscheme = scheme.name
                 break
-            elif not iface.wireless and iface.ip == scheme.ip :
+            elif not iface.wireless and iface.ip == scheme.ip:
                 matchscheme = scheme.name
                 break
-        if matchscheme :
+        if matchscheme:
             print "Netscheme", scheme.name
-        else :
+        else:
             print "(no netscheme found)"
 
-        if iface.wireless :
-            if iface.essid :
+        if iface.wireless:
+            if iface.essid:
                 print "  ESSID:", iface.essid
-        if iface.ip :
-            if matchscheme and scheme.dhcp :
+        if iface.ip:
+            if matchscheme and scheme.dhcp:
                 print "  IP:", iface.ip, "(dhcp)"
-            else :
+            else:
                 print "  IP:", iface.ip
         if matchscheme and current_from_file and \
-                scheme.name != current_from_file :
+                scheme.name != current_from_file:
             print scheme.name, "didn't match expected scheme of", \
                 current_from_file
 
-def list_accesspoints(maxap=20) :
+def list_accesspoints(maxap=20):
     print "Scanning for available access points ..."
     aplist = netutils.get_accesspoints()
 
@@ -646,40 +646,40 @@ def list_accesspoints(maxap=20) :
     aplist.sort(cmp=lambda x,y: cmp(y.quality, x.quality))
 
     print "Visible access points:"
-    for ap in aplist :
+    for ap in aplist:
         # Show mode if it's anything but Master -- e.g. Ad-hoc
         mode = ''
-        if ap.mode and ap.mode != 'Master' :
+        if ap.mode and ap.mode != 'Master':
             mode = ' (%s)' % ap.mode
 
         # Does it match a scheme we know about?
         schemestr = ''
-        for scheme in Schemes :
-            if ap.essid and ap.essid == scheme.essid :
+        for scheme in Schemes:
+            if ap.essid and ap.essid == scheme.essid:
                 schemestr = '(%s)' % scheme.name
 
-        print "%-22s : %-10s %-10s %s %s" % (ap.essid,
+        print "%-22s: %-10s %-10s %s %s" % (ap.essid,
                                              ap.encryption,
                                              mode, ap.quality,
                                              schemestr)
         continue
 
-def list_schemes() :
-    for scheme in Schemes :
+def list_schemes():
+    for scheme in Schemes:
         print scheme.name
 
-def reset_current_scheme() :
+def reset_current_scheme():
     # If we're using Debian networking, just reset whatever's
     # currently in /etc/network/interfaces.
     # However, that's a no-op in Ubuntu Pangolin (sigh!),
     # which currently is the only place we're actually using debian-style.
-    if False and is_debian() :
+    if False and is_debian():
         subprocess.call(["service", "networking", "restart"])
         return
 
     # If not debian, reset the current scheme if there is one.
     cur_scheme_file = os.path.join(NetScheme.schemedirfile('current'))
-    if not os.access(cur_scheme_file, os.R_OK) :
+    if not os.access(cur_scheme_file, os.R_OK):
         print "No current netscheme"
         return
 
@@ -689,13 +689,13 @@ def reset_current_scheme() :
     print "Resetting persistent scheme", schemename
     find_and_set_scheme(schemename, add=False, make_persistent=False)
 
-def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
+def find_and_set_scheme(newscheme, add=False, make_persistent=False):
 
     # Whether we made a new scheme or used an old one,
     # if there's a persistent scheme specified and the user has specified
     # a different scheme, make sure we remove the "current" file first.
     current_file = NetScheme.schemedirfile('current')
-    if os.path.exists(current_file) :
+    if os.path.exists(current_file):
         print "Removing old persistent scheme"
         os.remove(current_file)
 
@@ -703,13 +703,13 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
 
     found = False
 
-    for scheme in Schemes :
-        if scheme.name != newscheme :
+    for scheme in Schemes:
+        if scheme.name != newscheme:
             continue
 
         # Found it; scheme is a NetScheme object.
         # But do we actually see the scheme available now, if it's wireless?
-        if not scheme.essid :    # Not a wireless scheme, no need to search
+        if not scheme.essid:    # Not a wireless scheme, no need to search
             scheme.set_scheme(add)
             found = True
             break
@@ -718,16 +718,16 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
             print "No accesspoints visible."
             found = False
             sys.exit(1)
-        for ap in aplist :
-            if ap.essid == scheme.essid :
+        for ap in aplist:
+            if ap.essid == scheme.essid:
                 found = True
                 break
-        else :   
+        else:   
             found = True
-        if found :
+        if found:
             scheme.set_scheme(add)
             break
-        else :
+        else:
             print "Existing scheme %s with essid %s not available here." % \
                 (scheme.name, scheme.essid)
 
@@ -735,12 +735,12 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
     # to see if there's a similarly named scheme --
     # for instance, "Coffee Bean" instead of "coffeebean".
 
-    if not found :
+    if not found:
         # Didn't find an existing scheme: make a new one.
         print "No scheme named", newscheme
 
-        for ap in aplist :
-            if ap.essid == newscheme :
+        for ap in aplist:
+            if ap.essid == newscheme:
                 # Sometimes we seem to get called a second time. Why?
                 # traceback.print_stack()
     
@@ -749,15 +749,15 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
                     sys.exit(1)
 
                 # Get the key, if relevant:
-                if ap.encryption and ap.encryption != "open" :
+                if ap.encryption and ap.encryption != "open":
                     key = raw_input("Password: ")
-                else :
+                else:
                     key = ''
 
                 # Use the scheme
                 scheme = NetScheme(ap.essid, True, encryption=ap.encryption,
                                    essid=ap.essid, key=key)
-                if ap.interface :
+                if ap.interface:
                     scheme.interface = ap.interface
 
                 # Save it (if requested) even before trying to set it,
@@ -765,11 +765,11 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
                 # to keep typing 'y' and the password.
                 # XXX (Of course, if it's failing because the password is
                 # wrong, the only recourse is to edit the config file.)
-                if make_persistent :
+                if make_persistent:
                     ans = 'y'
-                else :
+                else:
                     ans = raw_input("Save this scheme for later? (y/N) ")
-                if ans == 'y' or ans == 'Y' :
+                if ans == 'y' or ans == 'Y':
                     scheme.save('.netscheme')
 
                 scheme.set_scheme()
@@ -778,23 +778,23 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
                 found = True
                 break
 
-    if not found :
+    if not found:
         print "No scheme set"
         return None
 
     # If specified, make this the default scheme, used for netscheme -r
     # The file should already have been created and chowned if needed.
-    if make_persistent :
+    if make_persistent:
         print "Trying to make this persistent"
 
         current_file = NetScheme.schemedirfile('current', True)
 
         # XXX Next test should be redundant -- hopefully we'll catch
         # creation errors in schemedirfile().
-        if not os.path.exists(current_file) :
+        if not os.path.exists(current_file):
             print "Eek, couldn't create", current_file
             return
-        else :
+        else:
             print current_file, "exists -- overwriting"
 
         print "Remembering current scheme %s to %s" \
@@ -805,11 +805,11 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False) :
 
     # Otherwise, if there's a default scheme and it's different
     # from the one we're switching to, clear it.
-    elif os.access(current_file, os.R_OK & os.W_OK) :
+    elif os.access(current_file, os.R_OK & os.W_OK):
         fp = open(current_file)
         filescheme = fp.readline().strip()
         fp.close()
-        if filescheme != newscheme :
+        if filescheme != newscheme:
             print "Removing persistent file", current_file
             os.remove(current_file)
 
@@ -824,12 +824,12 @@ Schemes = [
     ]
 
 # main
-if __name__ == "__main__" :
+if __name__ == "__main__":
     # Outer try clause to handle keyboard interrupts and not show
     # the user a nasty Python stack trace. Using signal.signal to
     # catch SIGINT doesn't work, perhaps because of the subprocesses
     # we need to call?
-    try :
+    try:
         from optparse import OptionParser
         usage = """Usage: %prog [-c [-s]] [scheme] | -l | -a | -r
     %prog changes your network (wi-fi) settings in /etc/network/interfaces.
@@ -872,7 +872,7 @@ if __name__ == "__main__" :
         #                   help="Create a new scheme (temporary unless -s is also set)")
         (options, args) = parser.parse_args()
 
-        if (options.list_accesspoints) :
+        if (options.list_accesspoints):
             list_accesspoints()
             sys.exit(0)
 
@@ -888,7 +888,7 @@ if __name__ == "__main__" :
         print "Reading configurations from", configfile
         config.read(configfile)
 
-        for scheme in config.sections() :
+        for scheme in config.sections():
             newscheme = NetScheme(name = scheme,
                                   dhcp = config.getboolean(scheme, 'dhcp'),
                                   ip = config.get(scheme, 'ip'),
@@ -906,27 +906,27 @@ if __name__ == "__main__" :
             Schemes.append(newscheme)
 
         # Schemes are read, options are read, time to do stuff.
-        if (options.list_schemes) :
+        if (options.list_schemes):
             list_schemes()
-        elif (options.reset_current_scheme) :
+        elif (options.reset_current_scheme):
             reset_current_scheme()
-        elif len(args) < 1 :
+        elif len(args) < 1:
             #print parser.usage
             print_current_scheme()
-        else :
-            try :
+        else:
+            try:
                 scheme = find_and_set_scheme(args[0], options.multi,
                                        make_persistent=options.make_persistent)
 
                 # If "watch" is on, fork and watch the connection in the
                 # background, resetting it when necessary:
-                if options.watch :
-                    if os.fork() :
+                if options.watch:
+                    if os.fork():
                         sys.exit(0)
                     else:
                         scheme.watch()
 
-            except OSError :
+            except OSError:
                 print "Couldn't set scheme"
-    except KeyboardInterrupt :
+    except KeyboardInterrupt:
         print "Interrupt"
