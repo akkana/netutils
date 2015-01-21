@@ -387,11 +387,14 @@ def get_accesspoints() :
         print "Is the interface's driver loaded?"
         return None
 
-    proc = subprocess.Popen('iwlist scan 2>/dev/null',
-                            shell=True, stdout=subprocess.PIPE)
+    # proc = subprocess.Popen('iwlist scan 2>/dev/null',
+    #                         shell=True, stdout=subprocess.PIPE)
+    proc = subprocess.Popen(['iwlist', 'scan'],
+                            shell=False, stdout=subprocess.PIPE)
     #proc = subprocess.Popen('cat /home/akkana/iwlist.out 2>/dev/null',
     #                        shell=True, stdout=subprocess.PIPE, )
     stdout_str = proc.communicate()[0]
+    # print "iwlist said:\n" + stdout_str
     stdout_list = stdout_str.split('\n')
 
     iface = None
