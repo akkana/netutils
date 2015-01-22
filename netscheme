@@ -877,10 +877,6 @@ if __name__ == "__main__":
         #                   help="Create a new scheme (temporary unless -s is also set)")
         (options, args) = parser.parse_args()
 
-        if (options.list_accesspoints):
-            list_accesspoints()
-            sys.exit(0)
-
         ###################################################
         # Read in a list of NetSchemes from the config file
         config = ConfigParser({'dhcp':False, 'ip':'',
@@ -909,6 +905,10 @@ if __name__ == "__main__":
                                                                  .split(','))
             newscheme.interface = config.get(scheme, 'interface')
             Schemes.append(newscheme)
+
+        if (options.list_accesspoints):
+            list_accesspoints()
+            sys.exit(0)
 
         # Schemes are read, options are read, time to do stuff.
         if (options.list_schemes):
