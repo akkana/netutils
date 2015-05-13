@@ -447,8 +447,11 @@ psk="%s"
         # Figure out what interface we'll be using:
         self.iface = None
         all = netutils.get_interfaces()
-        # Find the first wireless interface if the scheme is wireless,
-        # else the first wired.
+        # Find the last wireless interface if the scheme is wireless,
+        # else the last wired.
+        # Why last instead of first? Because if the user has a second
+        # (e.g. USB) network interface plugged in, it's probably because
+        # they need to use that one rather than the built-in interface.
         for i in all:
             print "Trying interface", i.name
             if i.wireless: print i.name, "is wireless"
@@ -462,7 +465,7 @@ psk="%s"
                     (not self.encryption and not i.wireless)) \
                     and (not add or not i.up):
                 self.iface = i
-                break
+                # break
         if not self.iface:
             print "Couldn't find an interface to set the scheme"
             return
