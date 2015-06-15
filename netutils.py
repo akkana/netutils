@@ -369,30 +369,34 @@ def get_first_wireless_interface():
 def get_accesspoints():
     """Return a list of visible wireless accesspoints."""
 
+    print "get_accesspoints"
     # We can only get accesspoints if a wifi interface is up.
+    # But we want the *last* wireless interface, not the first.
     newly_up = None
     ifaces = get_interfaces()
+    wiface = None
     for iface in ifaces:
         if iface.wireless:
-            if not iface.up:
-                iface.ifconfig_up()
-                # But wireless interfaces can't list accesspoints
-                # for a little while after being brought up:
-                time.sleep(5)
-                newly_up = iface
-            break
+            wiface = iface
 
-    if not iface.wireless:    # No wireless interface on this system
-        print "No wireless interface! Interfaces were", ifaces
+    if not wiface:
+        print "No wireless interface available! Interfaces were", ifaces
         print "Is the interface's driver loaded?"
         return None
 
+    iface = wiface
+    if not iface.up:
+        print "Bringing", iface, "up"
+        iface.ifconfig_up()
+        # But wireless interfaces can't list accesspoints
+        # for a little while after being brought up:
+        time.sleep(5)
+
     # proc = subprocess.Popen('iwlist scan 2>/dev/null',
     #                         shell=True, stdout=subprocess.PIPE)
-    proc = subprocess.Popen(['iwlist', 'scan'],
+    # print "Calling", ['iwlist', iface.name, 'scan']
+    proc = subprocess.Popen(['iwlist', iface.name, 'scan'],
                             shell=False, stdout=subprocess.PIPE)
-    #proc = subprocess.Popen('cat /home/akkana/iwlist.out 2>/dev/null',
-    #                        shell=True, stdout=subprocess.PIPE, )
     stdout_str = proc.communicate()[0]
     # print "iwlist said:\n" + stdout_str
     stdout_list = stdout_str.split('\n')
