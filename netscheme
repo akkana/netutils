@@ -76,8 +76,8 @@ class NetScheme:
         if self.essid and not self.encryption:
             self.encryption = "open"
 
-    @staticmethod
-    def get_ip_from_hostname():
+    @classmethod
+    def get_ip_from_hostname(cls):
         hostname = socket.gethostname()
         for line in open('/etc/hosts'):
             groups = line.split()
@@ -115,8 +115,8 @@ class NetScheme:
 
         return s
 
-    @staticmethod
-    def schemedirfile(filename, create=False):
+    @classmethod
+    def schemedirfile(cls, filename, create=False):
         '''Return the name of a file (.netscheme, current) in our config dir.
            If create is true, create the directory and file
            (and chown if needed) if it doesn't already exist.

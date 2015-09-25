@@ -230,8 +230,8 @@ default         192.168.1.1     0.0.0.0         UG        0 0          0 wlan0
         # route del -net 192.168.1.0 netmask 255.255.255.0 dev wlan0
         self.call_route("del")
 
-    @staticmethod
-    def read_route_table():
+    @classmethod
+    def read_route_table(cls):
         """Read the system routing table, returning a list of Routes."""
         proc = subprocess.Popen('route -n', shell=True, stdout=subprocess.PIPE)
         stdout_str = proc.communicate()[0]
