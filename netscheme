@@ -564,6 +564,12 @@ psk="%s"
         #     #print >>fp, "post-up chmod 644 /etc/resolv.conf"
         #     #print >>fp, "post-up chattr -i /etc/resolv.conf"
 
+        # At this point, we think the net is working.
+        # But increasingly, public wifi providers are using idiotic
+        # browser authentication that needs to be reset each time.
+        # So the net might not really be up. Try to fetch a simple
+        # web page and see, and if we're redirected, warn the user.
+
     def watch(self):
         '''Monitor the connection, and reset it if it drops.
         '''
@@ -649,9 +655,13 @@ def print_current_scheme():
 
 def list_accesspoints(maxap=20):
     print "Scanning for available access points ..."
-    aplist = netutils.get_accesspoints()
+    while True:
+        aplist = netutils.get_accesspoints()
+        if not aplist:
+            print "Couldn't scan for access points. Retrying ..."
+            time.sleep(2)
 
-    # Sort the list be ap.quality
+    # Sort the list by ap.quality
     aplist.sort(cmp=lambda x,y: cmp(y.quality, x.quality))
 
     print "Visible access points:"
