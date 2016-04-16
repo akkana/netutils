@@ -369,7 +369,7 @@ def get_first_wireless_interface():
 def get_accesspoints():
     """Return a list of visible wireless accesspoints."""
 
-    print "get_accesspoints"
+    print "Getting accesspoints"
     # We can only get accesspoints if a wifi interface is up.
     # But we want the *last* wireless interface, not the first.
     newly_up = None
@@ -388,9 +388,13 @@ def get_accesspoints():
     if not iface.up:
         print "Bringing", iface, "up"
         iface.ifconfig_up()
-        # But wireless interfaces can't list accesspoints
+        if not iface.up:
+            print "Failed to bring", iface, "up. Bailing."
+            return None
+
+        # Maybe it's because wireless interfaces can't list accesspoints
         # for a little while after being brought up:
-        time.sleep(5)
+        #time.sleep(5)
 
     # proc = subprocess.Popen('iwlist scan 2>/dev/null',
     #                         shell=True, stdout=subprocess.PIPE)

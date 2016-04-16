@@ -294,6 +294,12 @@ auto %s""" % (self.iface.name)
                     accesspoint = None
                     if self.essid != '':
                         aplist = netutils.get_accesspoints()
+                        # The first time, often we get:
+                        # SIOCSIFFLAGS: Operation not possible due to RF-kill
+                        # get_accesspoints() will return a null list then,
+                        # so check for that.
+                        if not aplist:
+                            continue
                         for ap in aplist:
                             if ap.essid == self.essid:
                                 accesspoint = ap
