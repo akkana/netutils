@@ -39,7 +39,6 @@ class NetInterface:
         self.netmask = ''
         self.essid = ''
         self.encryption = None
-        self.up = False
         self.wireless = False
 
     def __repr__(self):
@@ -54,7 +53,7 @@ class NetInterface:
                     s += ' (wireless, essid=%s, open)' % self.essid
             else:
                 s += ' (wireless)'
-        if self.up:
+        if self.is_up():
             s += ' UP'
         if self.ip:
             s += ' ip=' + self.ip
@@ -97,9 +96,7 @@ class NetInterface:
         # shows that both wlan0 and eth0 have been marked up.
         # How do we mark wlan0 up without bringing eth0 with it?
         # Running ifconfig wlan0 up by hand doesn't do that.
-
-        #print "Before calling ifconfig_up", self.name, ", ifconfig -a looks like:"
-        subprocess.call(["ifconfig", self.name, "up"])
+        subprocess.call(["/sbin/ifconfig", self.name, "up"])
 
     def ifconfig_down(self):
         """Mark the interface DOWN with ifconfig"""
@@ -111,6 +108,25 @@ class NetInterface:
         # and then mark it down with ifconfig.
         subprocess.call(["ifconfig", self.name, "down"])
         self.reload()
+
+    def is_up(self):
+        # Old format: '          UP BROADCAST MULTICAST  MTU:1500  Metric:1'
+        # New format: 'wlan0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        proc = subprocess.Popen(["/sbin/ifconfig", self.name],
+                                shell=False, stdout=subprocess.PIPE)
+        stdout_lines = proc.communicate()[0].split('\n')
+        for line in stdout_lines:
+            if len(line) == 0:
+                continue
+            if line[0] == ' ':
+                words = line.strip().split()
+                if words[0] == 'UP':
+                    return True
+            elif 'flags=' in line and 'UP,' in line:
+                return True
+
+        # Didn't see any UP line.
+        return False
 
     def check_associated(self):
         '''Are we associated with an ESSID? Return the essid name, or None.
@@ -282,9 +298,6 @@ def get_interfaces(only_up=False, name=None):
 		    words[0] = words[0][0:-1]
                 cur_iface = NetInterface(words[0])
                 ifaces.append(cur_iface)
-
-                if words[2].startswith('flags'):  # new format
-                    cur_iface.up = ('UP' in words[2])
                         
             else:
                 cur_iface = None
@@ -314,8 +327,6 @@ def get_interfaces(only_up=False, name=None):
                 match = re.search('ether (..:..:..:..:..:..)', line)
                 if match:
                     cur_iface.mac = match.group(1)
-            elif words[0] == 'UP':
-                cur_iface.up = True
 
     # Now we have the list of all interfaces. Find out which are wireless:
     proc = subprocess.Popen('iwconfig', shell=False,
@@ -369,36 +380,37 @@ def get_first_wireless_interface():
 def get_accesspoints():
     """Return a list of visible wireless accesspoints."""
 
-    print "Getting accesspoints"
     # We can only get accesspoints if a wifi interface is up.
     # But we want the *last* wireless interface, not the first.
     newly_up = None
     ifaces = get_interfaces()
+    # print "Got interfaces:", ifaces
+
     wiface = None
     for iface in ifaces:
         if iface.wireless:
             wiface = iface
+            print iface.name, "is wireless"
 
     if not wiface:
         print "No wireless interface available! Interfaces were", ifaces
         print "Is the interface's driver loaded?"
         return None
 
+    # See if other interfaces are marked UP.
+    for iface in ifaces:
+        if iface != wiface and iface.is_up():
+            iface.ifconfig_down()
+
     iface = wiface
-    if not iface.up:
-        print "Bringing", iface, "up"
+    if not iface.is_up():
         iface.ifconfig_up()
-        if not iface.up:
+        if not iface.is_up():
             print "Failed to bring", iface, "up. Bailing."
             return None
+    else:
+        print iface, "is already up"
 
-        # Maybe it's because wireless interfaces can't list accesspoints
-        # for a little while after being brought up:
-        #time.sleep(5)
-
-    # proc = subprocess.Popen('iwlist scan 2>/dev/null',
-    #                         shell=True, stdout=subprocess.PIPE)
-    # print "Calling", ['iwlist', iface.name, 'scan']
     proc = subprocess.Popen(['iwlist', iface.name, 'scan'],
                             shell=False, stdout=subprocess.PIPE)
     stdout_str = proc.communicate()[0]
@@ -473,6 +485,7 @@ def get_accesspoints():
     #     print "Take the interface back down now"
     #     newly_up.ifconfig_down()
 
+    print "Found", len(aplist), "accesspoints"
     return aplist
 
 def ifdown_all():

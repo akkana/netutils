@@ -459,7 +459,7 @@ psk="%s"
         # (e.g. USB) network interface plugged in, it's probably because
         # they need to use that one rather than the built-in interface.
         for i in all:
-            print "Trying interface", i.name
+            # print "Trying interface", i.name
             if i.wireless: print i.name, "is wireless"
             # The clause from hell. What this does is:
             # - If the scheme has an encryption setting (including "open")
@@ -469,7 +469,7 @@ psk="%s"
             #   can't use any interface that's already up.
             if ((self.encryption and i.wireless) or \
                     (not self.encryption and not i.wireless)) \
-                    and (not add or not i.up):
+                    and (not add or not i.is_up()):
                 self.iface = i
                 # break
         if not self.iface:
@@ -622,7 +622,7 @@ def print_current_scheme():
 
     ifaces = netutils.get_interfaces()
     for iface in ifaces:
-        if not iface.up:
+        if not iface.is_up():
             continue
 
         print iface.name, ":",
@@ -657,9 +657,10 @@ def list_accesspoints(maxap=20):
     print "Scanning for available access points ..."
     while True:
         aplist = netutils.get_accesspoints()
-        if not aplist:
-            print "Couldn't scan for access points. Retrying ..."
-            time.sleep(2)
+        if aplist:
+            break
+        print "Couldn't scan for access points. Retrying ..."
+        time.sleep(2)
 
     # Sort the list by ap.quality
     aplist.sort(cmp=lambda x,y: cmp(y.quality, x.quality))
@@ -726,15 +727,22 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False):
         if scheme.name != newscheme:
             continue
 
+        # XXX TO DO: use python soundex module if available
+        # to see if there's a similarly named scheme --
+        # for instance, "Coffee Bean" instead of "coffeebean".
+
         # Found it; scheme is a NetScheme object.
         # But do we actually see the scheme available now, if it's wireless?
+        # WE NEED TO set_scheme WHETHER OR NOT IT HAS AN ESSID!
+        # BUT WAIT, THAT MAY NOT MATTER HERE SINCE CLINK DOES.
         if not scheme.essid:    # Not a wireless scheme, no need to search
+            print "Setting scheme to", scheme.name
             scheme.set_scheme(add)
             found = True
             break
         # It's a wireless scheme. Did we see any accesspoints?
         if not aplist:
-            print "No accesspoints visible."
+            print "No accesspoints visible.\n"
             found = False
             sys.exit(1)
         for ap in aplist:
@@ -749,10 +757,6 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False):
         else:
             print "Existing scheme %s with essid %s not available here." % \
                 (scheme.name, scheme.essid)
-
-    # XXX TO DO: use python soundex module if available
-    # to see if there's a similarly named scheme --
-    # for instance, "Coffee Bean" instead of "coffeebean".
 
     if not found:
         # Didn't find an existing scheme: make a new one.
