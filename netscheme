@@ -15,6 +15,7 @@ import tempfile
 import time
 from ConfigParser import ConfigParser
 import socket    # for socket.gethostname()
+import urllib2
 
 # Only for debugging
 import traceback
@@ -294,6 +295,12 @@ auto %s""" % (self.iface.name)
                     accesspoint = None
                     if self.essid != '':
                         aplist = netutils.get_accesspoints()
+                        # The first time, often we get:
+                        # SIOCSIFFLAGS: Operation not possible due to RF-kill
+                        # get_accesspoints() will return a null list then,
+                        # so check for that.
+                        if not aplist:
+                            continue
                         for ap in aplist:
                             if ap.essid == self.essid:
                                 accesspoint = ap
@@ -439,6 +446,34 @@ psk="%s"
                 #subprocess.call(["route", "add", "default", "gw",
                 #                 self.gateway])
 
+    # Increasingly, public wifi providers are using idiotic
+    # browser authentication that needs to be reset each time.
+    # So the net might not really be up. Try to fetch a simple
+    # web page and see, and if we're redirected, warn the user.
+    # What other clients do:
+    #   http://forum.mikrotik.com/viewtopic.php?t=94670#p472054
+    def show_browser_if_redirect(self, url):
+        request = urllib2.Request(url)
+
+        # request.add_header('User-Agent', user_agent)
+
+        # A few sites, like http://nymag.com, gzip their http.
+        # Python doesn't handle that automatically: we have to ask for it.
+        request.add_header('Accept-encoding', 'gzip')
+        response = urllib2.urlopen(request, timeout=100)
+        # Lots of ways this can fail.
+        # e.g. ValueError, "unknown url type"
+        # or BadStatusLine: ''
+
+        # Were we redirected? geturl() will tell us that.
+        newurl = response.geturl()
+        if newurl != url:
+            print
+            print url, "redirected to", newurl
+            subprocess.call(["quickbrowse", url])
+        else:
+            print "Looks like we're really connected -- no redirect"
+
     def set_scheme(self, add=False):
         """Make this scheme active on the current machine.
            If add is true, don't take down any existing interfaces first.
@@ -453,7 +488,7 @@ psk="%s"
         # (e.g. USB) network interface plugged in, it's probably because
         # they need to use that one rather than the built-in interface.
         for i in all:
-            print "Trying interface", i.name
+            # print "Trying interface", i.name
             if i.wireless: print i.name, "is wireless"
             # The clause from hell. What this does is:
             # - If the scheme has an encryption setting (including "open")
@@ -463,7 +498,7 @@ psk="%s"
             #   can't use any interface that's already up.
             if ((self.encryption and i.wireless) or \
                     (not self.encryption and not i.wireless)) \
-                    and (not add or not i.up):
+                    and (not add or not i.is_up()):
                 self.iface = i
                 # break
         if not self.iface:
@@ -558,6 +593,10 @@ psk="%s"
         #     #print >>fp, "post-up chmod 644 /etc/resolv.conf"
         #     #print >>fp, "post-up chattr -i /etc/resolv.conf"
 
+        # At this point, we think the net is working.
+        # But does it need a sign-on?
+        self.show_browser_if_redirect("http://shallowsky.com/testconnection.html")
+
     def watch(self):
         '''Monitor the connection, and reset it if it drops.
         '''
@@ -610,7 +649,7 @@ def print_current_scheme():
 
     ifaces = netutils.get_interfaces()
     for iface in ifaces:
-        if not iface.up:
+        if not iface.is_up():
             continue
 
         print iface.name, ":",
@@ -643,9 +682,14 @@ def print_current_scheme():
 
 def list_accesspoints(maxap=20):
     print "Scanning for available access points ..."
-    aplist = netutils.get_accesspoints()
+    while True:
+        aplist = netutils.get_accesspoints()
+        if aplist:
+            break
+        print "Couldn't scan for access points. Retrying ..."
+        time.sleep(2)
 
-    # Sort the list be ap.quality
+    # Sort the list by ap.quality
     aplist.sort(cmp=lambda x,y: cmp(y.quality, x.quality))
 
     print "Visible access points:"
@@ -710,15 +754,22 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False):
         if scheme.name != newscheme:
             continue
 
+        # XXX TO DO: use python soundex module if available
+        # to see if there's a similarly named scheme --
+        # for instance, "Coffee Bean" instead of "coffeebean".
+
         # Found it; scheme is a NetScheme object.
         # But do we actually see the scheme available now, if it's wireless?
+        # WE NEED TO set_scheme WHETHER OR NOT IT HAS AN ESSID!
+        # BUT WAIT, THAT MAY NOT MATTER HERE SINCE CLINK DOES.
         if not scheme.essid:    # Not a wireless scheme, no need to search
+            print "Setting scheme to", scheme.name
             scheme.set_scheme(add)
             found = True
             break
         # It's a wireless scheme. Did we see any accesspoints?
         if not aplist:
-            print "No accesspoints visible."
+            print "No accesspoints visible.\n"
             found = False
             sys.exit(1)
         for ap in aplist:
@@ -733,10 +784,6 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False):
         else:
             print "Existing scheme %s with essid %s not available here." % \
                 (scheme.name, scheme.essid)
-
-    # XXX TO DO: use python soundex module if available
-    # to see if there's a similarly named scheme --
-    # for instance, "Coffee Bean" instead of "coffeebean".
 
     if not found:
         # Didn't find an existing scheme: make a new one.
