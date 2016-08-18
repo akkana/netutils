@@ -22,6 +22,25 @@ import traceback
 
 import netutils
 
+# For testing redirects.
+# Change this to use your own page.
+TESTCONNECTION = "http://shallowsky.com/testconnection.html"
+TESTCONNECTION_OUT = '''<html>
+<head>
+<title></title>
+</head>
+
+<body>
+
+<h1>Connection test</h1>
+
+<p>
+Is this thing on?
+
+</body>
+</html>
+'''
+
 def pathsplit(path):
     '''Split a path into all its components -- not just splitting off
        the last like os.path.split.
@@ -452,27 +471,27 @@ psk="%s"
     # web page and see, and if we're redirected, warn the user.
     # What other clients do:
     #   http://forum.mikrotik.com/viewtopic.php?t=94670#p472054
-    def show_browser_if_redirect(self, url):
+    def show_browser_if_redirect(self, url, url_out):
+        print "Trying to connect to", url
         request = urllib2.Request(url)
 
-        # request.add_header('User-Agent', user_agent)
-
-        # A few sites, like http://nymag.com, gzip their http.
-        # Python doesn't handle that automatically: we have to ask for it.
-        request.add_header('Accept-encoding', 'gzip')
-        response = urllib2.urlopen(request, timeout=100)
+        try:
+            response = urllib2.urlopen(request, timeout=100)
         # Lots of ways this can fail.
         # e.g. ValueError, "unknown url type"
         # or BadStatusLine: ''
+        except urllib2.URLError, e:
+            print "urllib2.URLError:", e
 
-        # Were we redirected? geturl() will tell us that.
-        newurl = response.geturl()
-        if newurl != url:
-            print
-            print url, "redirected to", newurl
-            subprocess.call(["quickbrowse", url])
-        else:
+        # Were we redirected? In theory response.geturl() will tell us that,
+        # but in practice, it doesn't, so we have to fetch the content
+        # of a page and compare it to the expected value.
+        html = response.read()
+        if html == url_out:
             print "Looks like we're really connected -- no redirect"
+        else:
+            print "Couldn't make a test connection -- probably redirected."
+            subprocess.call(["quickbrowse", url])
 
     def set_scheme(self, add=False):
         """Make this scheme active on the current machine.
@@ -595,7 +614,7 @@ psk="%s"
 
         # At this point, we think the net is working.
         # But does it need a sign-on?
-        self.show_browser_if_redirect("http://shallowsky.com/testconnection.html")
+        self.show_browser_if_redirect(TESTCONNECTION, TESTCONNECTION_OUT)
 
     def watch(self):
         '''Monitor the connection, and reset it if it drops.
