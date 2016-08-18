@@ -25,8 +25,7 @@ import netutils
 # For testing redirects.
 # Change this to use your own page.
 TESTCONNECTION = "http://shallowsky.com/testconnection.html"
-TESTCONNECTION_OUT = '''
-<html>
+TESTCONNECTION_OUT = '''<html>
 <head>
 <title></title>
 </head>
@@ -475,12 +474,6 @@ psk="%s"
     def show_browser_if_redirect(self, url, url_out):
         print "Trying to connect to", url
         request = urllib2.Request(url)
-
-        # request.add_header('User-Agent', user_agent)
-
-        # A few sites, like http://nymag.com, gzip their http.
-        # Python doesn't handle that automatically: we have to ask for it.
-        request.add_header('Accept-encoding', 'gzip')
 
         try:
             response = urllib2.urlopen(request, timeout=100)
