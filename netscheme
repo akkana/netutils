@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 #
-# Network scheme-setting tool, version 1.4.
-# Copyright 2010-2012 by Akkana Peck akkana@shallowsky.com
+# Network scheme-setting tool
+# Copyright 2010-2016 by Akkana Peck akkana@shallowsky.com
 # ... share and enjoy under the GPLv2 or (at your option) later.
 #
 
@@ -15,31 +15,12 @@ import tempfile
 import time
 from ConfigParser import ConfigParser
 import socket    # for socket.gethostname()
-import urllib2
+import requests  # for testing for redirection
 
 # Only for debugging
 import traceback
 
 import netutils
-
-# For testing redirects.
-# Change this to use your own page.
-TESTCONNECTION = "http://shallowsky.com/testconnection.html"
-TESTCONNECTION_OUT = '''<html>
-<head>
-<title></title>
-</head>
-
-<body>
-
-<h1>Connection test</h1>
-
-<p>
-Is this thing on?
-
-</body>
-</html>
-'''
 
 def pathsplit(path):
     '''Split a path into all its components -- not just splitting off
@@ -65,6 +46,8 @@ class NetScheme:
        wireless schemes will have encryption in ( "open", "wep", "wpa" )
        The other arguments should be self-explanatory.
     """
+    configdir = None
+
     def __init__(self, name, dhcp=True,
                  ip='', netmask='', broadcast='', gateway='',
                  encryption='', essid='', key='', dns_servers=''):
@@ -142,21 +125,24 @@ class NetScheme:
            (and chown if needed) if it doesn't already exist.
         '''
 
-        # Get the homedir for the user running this script.
-        # Unfortunately, if it's run under sudo, ~ and $HOME may expand to root
-        # rather than to the actual user. This is a configurable sudo option
-        # and varies randomly among distros.
-        sudo_user = os.getenv("SUDO_USER")
-        if sudo_user:
-            home = os.path.expanduser("~" + sudo_user)
-        else:
-            home = os.path.expanduser("~")
+        if not NetScheme.configdir:
+            # Get the homedir for the user running this script,
+            # if we haven't already.
+            # Alasy, if it's run under sudo, ~ and $HOME may expand to root
+            # rather than to the actual user. This is a configurable sudo option
+            # and varies randomly among distros.
+            sudo_user = os.getenv("SUDO_USER")
+            if sudo_user:
+                home = os.path.expanduser("~" + sudo_user)
+            else:
+                home = os.path.expanduser("~")
 
-        configdir = os.path.join(home, ".config", "netscheme")
+            NetScheme.configdir = os.path.join(home, ".config", "netscheme")
+
         if filename:
-            configfile = os.path.join(configdir, filename)
+            configfile = os.path.join(NetScheme.configdir, filename)
         else:
-            configfile = configdir
+            configfile = NetScheme.configdir
 
         # If the directory already exists and we don't need to create
         # a new file (just the directory itself), we're done.
@@ -175,11 +161,11 @@ class NetScheme:
 
         # Get the part of the path inside the user's homedir.
         # We don't want to create anything above the homedir level.
-        if not configdir.startswith(home):
+        if not NetScheme.configdir.startswith(home):
             print "Confusion! config dir %s isn't inside homedir %s" \
-                % (configdir, home)
+                % (NetScheme.configdir, home)
             return
-        reldir = configdir[len(home)+1:]
+        reldir = NetScheme.configdir[len(home)+1:]
         pathcomp = pathsplit(reldir)
         homepath = home
         try:
@@ -191,12 +177,12 @@ class NetScheme:
                     if sudo_user:
                         print "chowning", homepath
                         os.chown(homepath, uid, -1)
-                    if homepath != configdir:
+                    if homepath != NetScheme.configdir:
                         print "Eek -- after creating, %s != %s" \
                             % (homepath, configfile)
 
         except:
-            print "Couldn't create", configdir, "-- using $HOME"
+            print "Couldn't create", NetScheme.configdir, "-- using $HOME"
             return home
 
         # Now we've created and chowned the directory.
@@ -471,27 +457,41 @@ psk="%s"
     # web page and see, and if we're redirected, warn the user.
     # What other clients do:
     #   http://forum.mikrotik.com/viewtopic.php?t=94670#p472054
-    def show_browser_if_redirect(self, url, url_out):
+    def show_browser_if_redirect(self, url):
+        """Try to fetch a test URL. If we're redirected to some other URL
+           (probably a stupid login page), pop up a browser.
+        """
         print "Trying to connect to", url
-        request = urllib2.Request(url)
-
-        try:
-            response = urllib2.urlopen(request, timeout=100)
-        # Lots of ways this can fail.
-        # e.g. ValueError, "unknown url type"
-        # or BadStatusLine: ''
-        except urllib2.URLError, e:
-            print "urllib2.URLError:", e
-
-        # Were we redirected? In theory response.geturl() will tell us that,
-        # but in practice, it doesn't, so we have to fetch the content
-        # of a page and compare it to the expected value.
-        html = response.read()
-        if html == url_out:
+        r = requests.get(url)
+        if r.url == url:
             print "Looks like we're really connected -- no redirect"
         else:
             print "Couldn't make a test connection -- probably redirected."
             subprocess.call(["quickbrowse", url])
+
+        # Other tests: if r.history, or check r.status_code.
+
+        # If the requests library doesn't do it, revert to this much
+        # less elegant method of checking expected content of the page:
+        # request = urllib2.Request(url)
+
+        # try:
+        #     response = urllib2.urlopen(request, timeout=100)
+        # # Lots of ways this can fail.
+        # # e.g. ValueError, "unknown url type"
+        # # or BadStatusLine: ''
+        # except urllib2.URLError, e:
+        #     print "urllib2.URLError:", e
+
+        # # Were we redirected? In theory response.geturl() will tell us that,
+        # # but in practice, it doesn't, so we have to fetch the content
+        # # of a page and compare it to the expected value.
+        # html = response.read()
+        # if html == url_out:
+        #     print "Looks like we're really connected -- no redirect"
+        # else:
+        #     print "Couldn't make a test connection -- probably redirected."
+        #     subprocess.call(["quickbrowse", url])
 
     def set_scheme(self, add=False):
         """Make this scheme active on the current machine.
@@ -614,7 +614,18 @@ psk="%s"
 
         # At this point, we think the net is working.
         # But does it need a sign-on?
-        self.show_browser_if_redirect(TESTCONNECTION, TESTCONNECTION_OUT)
+        # Alas, there's no universal page everyone can use.
+        # So make one on your own website, or find a trusted page,
+        # and put that URL in ~/.config/netscheme/testurl
+        testurl = None
+        testurlfile = os.path.join(NetScheme.configdir, "testurl")
+        if os.path.exists(testurlfile):
+            with open(testurlfile) as tufile:
+                testurl = tufile.read().strip()
+        if testurl:
+            self.show_browser_if_redirect(testurl)
+        else:
+            print "No test URL set; not checking for redirects"
 
     def watch(self):
         '''Monitor the connection, and reset it if it drops.
@@ -909,9 +920,10 @@ if __name__ == "__main__":
     %prog changes your network (wi-fi) settings in /etc/network/interfaces.
     You can make named schemes, like "home" or "work", matching places you
     go frequently, or just make temporary schemes for places you visit briefly.
-    """
-        versionstr = "%prog 0.6: Set wireless network schemes.\n\
-    Copyright 2010 by Akkana Peck; share and enjoy under the GPL v.2 or later."
+"""
+        versionstr = """%prog 0.6: Set wireless network schemes.
+
+Copyright 2010-2016 by Akkana Peck; share and enjoy under the GPL v.2 or later."""
         parser = OptionParser(usage=usage, version=versionstr)
         parser.add_option("-l", "--list",
                           action="store_true", dest="list_schemes",
