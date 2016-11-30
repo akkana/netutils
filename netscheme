@@ -15,7 +15,7 @@ import tempfile
 import time
 from ConfigParser import ConfigParser
 import socket    # for socket.gethostname()
-import requests  # for testing for redirection
+import urllib2
 
 # Only for debugging
 import traceback
@@ -457,41 +457,34 @@ psk="%s"
     # web page and see, and if we're redirected, warn the user.
     # What other clients do:
     #   http://forum.mikrotik.com/viewtopic.php?t=94670#p472054
-    def show_browser_if_redirect(self, url):
+    def show_browser_if_redirect(self, url, urlcontent):
         """Try to fetch a test URL. If we're redirected to some other URL
            (probably a stupid login page), pop up a browser.
         """
         print "Trying to connect to", url
-        r = requests.get(url)
-        if r.url == url:
+
+        request = urllib2.Request(url)
+        html = None
+
+        try:
+            response = urllib2.urlopen(request, timeout=100)
+
+            # Were we redirected? In theory response.geturl() will tell us that,
+            # but in practice, it doesn't, so we have to fetch the content
+            # of a page and compare it to the expected value.
+            html = response.read()
+
+        # Lots of ways this can fail.
+        # e.g. ValueError, "unknown url type"
+        # or BadStatusLine: ''
+        except urllib2.URLError, e:
+            print "urllib2.URLError:", e
+
+        if html == urlcontent:
             print "Looks like we're really connected -- no redirect"
         else:
             print "Couldn't make a test connection -- probably redirected."
             subprocess.call(["quickbrowse", url])
-
-        # Other tests: if r.history, or check r.status_code.
-
-        # If the requests library doesn't do it, revert to this much
-        # less elegant method of checking expected content of the page:
-        # request = urllib2.Request(url)
-
-        # try:
-        #     response = urllib2.urlopen(request, timeout=100)
-        # # Lots of ways this can fail.
-        # # e.g. ValueError, "unknown url type"
-        # # or BadStatusLine: ''
-        # except urllib2.URLError, e:
-        #     print "urllib2.URLError:", e
-
-        # # Were we redirected? In theory response.geturl() will tell us that,
-        # # but in practice, it doesn't, so we have to fetch the content
-        # # of a page and compare it to the expected value.
-        # html = response.read()
-        # if html == url_out:
-        #     print "Looks like we're really connected -- no redirect"
-        # else:
-        #     print "Couldn't make a test connection -- probably redirected."
-        #     subprocess.call(["quickbrowse", url])
 
     def set_scheme(self, add=False):
         """Make this scheme active on the current machine.
@@ -622,8 +615,10 @@ psk="%s"
         if os.path.exists(testurlfile):
             with open(testurlfile) as tufile:
                 testurl = tufile.read().strip()
+            with open(testurlfile + ".out") as tufile:
+                testurl_content = tufile.read()
         if testurl:
-            self.show_browser_if_redirect(testurl)
+            self.show_browser_if_redirect(testurl, testurl_content)
         else:
             print "No test URL set; not checking for redirects"
 
