@@ -461,6 +461,15 @@ psk="%s"
         """Try to fetch a test URL. If we're redirected to some other URL
            (probably a stupid login page), pop up a browser.
         """
+        # Don't want to run the browser as root, so de-escalate privilege.
+        # os.getuid(), os.geteuid() and psutil.uids() are all zero under sudo,
+        # but sudo helpfully leaves us an env variable we can use.
+        orig_uid = os.getenv("SUDO_UID")
+        if orig_uid:
+            print "De-escalating back to UID", orig_uid
+            orig_uid = int(orig_uid)
+            os.setuid(orig_uid)
+
         print "Trying to connect to", url
 
         request = urllib2.Request(url)
