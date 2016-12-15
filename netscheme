@@ -605,6 +605,15 @@ psk="%s"
         #     #print >>fp, "post-up chmod 644 /etc/resolv.conf"
         #     #print >>fp, "post-up chattr -i /etc/resolv.conf"
 
+        # DHCP could have failed. Check whether we have an IP address.
+        up_ifaces = netutils.get_interfaces(True)
+        for iface in up_ifaces:
+            if iface.name == self.iface.name:
+                print iface.name, "has IP", iface.ip
+                if not iface.ip:
+                    print "Argh -- we must not have gotten an IP address"
+                    return
+
         # At this point, we think the net is working.
         # But does it need a sign-on?
         # Alas, there's no universal page everyone can use.
