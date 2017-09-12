@@ -423,8 +423,10 @@ psk="%s"
         if self.dhcp:
             print "Getting dhcp"
             try:
-                subprocess.check_call(["dhcpcd", "-G", "-C", "resolv.conf",
-                                       self.iface.name])
+                # dhcp no longer works with these parameters:
+                # subprocess.check_call(["dhcpcd", "-G", "-C", "resolv.conf",
+                #                        self.iface.name])
+                subprocess.check_call(["dhcpcd",  self.iface.name])
             #except subprocess.CalledProcessError, e:
             except Exception, e:
                 print "Couldn't run dhcpcd; trying dhclient"
