@@ -4,6 +4,12 @@
 # Copyright 2010-2012 by Akkana Peck akkana@shallowsky.com
 # ... share and enjoy under the GPLv2 or (at your option) later.
 
+# Some newer libraries that this could potentially use instead of
+# parsing ifconfig or ip output:
+# https://xmine128.tk/Software/Python/netlink/docs/
+# https://pypi.python.org/pypi/netutils-linux/
+# https://github.com/svinota/pyroute2
+
 """netutils: a set of networking utilities for Python.
 Copyright 2010 by Akkana Peck <akkana@shallowsky.com>
  ... share and enjoy under the GPLv2 or (at your option) later.
@@ -40,6 +46,8 @@ class NetInterface:
         self.essid = ''
         self.encryption = None
         self.wireless = False
+        self.mac = ''
+        self.up = False
 
     def __repr__(self):
         """Prettyprint a NetInterface instance"""
@@ -84,54 +92,43 @@ class NetInterface:
             subprocess.call(["modprobe", module])
 
     def ifconfig_up(self):
-        """Mark the interface UP with ifconfig"""
+        """Mark the interface UP with ifconfig or ip"""
 
-        # Okay, I have no idea what's going on here.
-        # If I set an eth0 scheme (which works correctly),
-        # then later try to set a wlan0 WPA scheme,
-        # when we get here, all interfaces are properly down.
-        # ifconfig -a shows that.
-        # Then we call ifconfig wlan0 up,
-        # and immediately after that, another ifconfig -a
-        # shows that both wlan0 and eth0 have been marked up.
-        # How do we mark wlan0 up without bringing eth0 with it?
-        # Running ifconfig wlan0 up by hand doesn't do that.
-        subprocess.call(["/sbin/ifconfig", self.name, "up"])
+        # subprocess.call(["/sbin/ifconfig", self.name, "up"])
+        subprocess.call(["/bin/ip", "link", "set", "dev", self.name, "up"])
 
     def ifconfig_down(self):
-        """Mark the interface DOWN with ifconfig"""
+        """Mark the interface DOWN with ifconfig or ip"""
         # It is not enough to just mark it down -- networking
         # will still try to use it if it has an IP address configured.
         # So remove that too.
         # Doing it through ifconfig doesn't seem to work, so use ip.
         subprocess.call(["ip", "addr", "flush", "dev", self.name])
-        # and then mark it down with ifconfig.
-        subprocess.call(["ifconfig", self.name, "down"])
+        # and then mark it down:
+        # subprocess.call(["ifconfig", self.name, "down"])
+        subprocess.call(["/bin/ip", "link", "set", "dev", self.name, "down"])
+
         self.reload()
 
     def is_up(self):
         # Old format: '          UP BROADCAST MULTICAST  MTU:1500  Metric:1'
         # New format: 'wlan0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
-        proc = subprocess.Popen(["/sbin/ifconfig", self.name],
+        # ip format: 2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+        proc = subprocess.Popen(["/bin/ip", "a", "show", self.name],
                                 shell=False, stdout=subprocess.PIPE)
         stdout_lines = proc.communicate()[0].split('\n')
-        for line in stdout_lines:
-            if len(line) == 0:
-                continue
-            if line[0] == ' ':
-                words = line.strip().split()
-                if words[0] == 'UP':
-                    return True
-            elif 'flags=' in line and 'UP,' in line:
-                return True
-
-        # Didn't see any UP line.
-        return False
+        words = stdout_lines[0].strip().split()
+        if not words[1].startswith(self.name):
+            raise RuntimeError("Couldn't parse ip line: '%s'" % stdout_lines[0])
+        if not words[2].startswith('<') or not words[2].endswith('>'):
+            raise RuntimeError("Couldn't parse ip flags '%s'" % words[2])
+        flags = words[2][1:-1].split(',')
+        return 'UP' in flags
 
     def check_associated(self):
         '''Are we associated with an ESSID? Return the essid name, or None.
         '''
-        proc = subprocess.Popen("iwconfig %s" % self.name, shell=True,
+        proc = subprocess.Popen(["iwconfig", self.name], shell=False,
                                 stdout=subprocess.PIPE)
         stdout_str = proc.communicate()[0]
         stdout_list = stdout_str.split('\n')
@@ -249,7 +246,8 @@ default         192.168.1.1     0.0.0.0         UG        0 0          0 wlan0
     @classmethod
     def read_route_table(cls):
         """Read the system routing table, returning a list of Routes."""
-        proc = subprocess.Popen('route -n', shell=True, stdout=subprocess.PIPE)
+        proc = subprocess.Popen(["route",  "-n"], shell=False,
+                                stdout=subprocess.PIPE)
         stdout_str = proc.communicate()[0]
         stdout_list = stdout_str.split('\n')
 
@@ -264,69 +262,82 @@ default         192.168.1.1     0.0.0.0         UG        0 0          0 wlan0
 def get_interfaces(only_up=False, name=None):
     """Returns a list of NetInterfaces for all eth*, wlan* or mlan*
        interfaces visible from ifconfig.
+       Read ip, mac, broadcast, netmask if available.
        Omit lo, vpn, ipv6 and other non-physical interfaces.
        If only_up is true, use ifconfig instead if ifconfig -a.
        If name is specified, return only the first matching that name.
     """
+    args = ["/bin/ip", "addr", "show"]
     if name:
-      ifcfg = "ifconfig " + name
-    elif only_up:
-        ifcfg = 'ifconfig'
-    else:
-        ifcfg = '/sbin/ifconfig -a'
-        #ifcfg = 'cat /home/akkana/ifconfig.arch'
-    proc = subprocess.Popen(ifcfg, shell=True, stdout=subprocess.PIPE)
-    stdout_str = proc.communicate()[0]
-    stdout_list = stdout_str.split('\n')
+        args.append(name)
+    if only_up:
+        args.append("up")
+
+    proc = subprocess.Popen(args, shell=False, stdout=subprocess.PIPE)
+    stdout_lines = proc.communicate()[0].split('\n')
+
     ifaces = []
     cur_iface = None
-    for line in stdout_list:
+
+    # Interfaces start with a number, like 2:, followed by the iface name.
+    # All other lines start with a space.
+    for i, line in enumerate(stdout_lines):
         if len(line) == 0:
             continue
-        words = line.split()
-        if line[0] != ' ':
-            # It's a new interface. Should have a line like:
-            # eth0      Link encap:Ethernet  HWaddr 00:01:4A:98:F1:51
-            # or else a line line:
-            # flags=4098<BROADCAST,MULTICAST>
-            # with no LOOPBACK flag.
-            # We only want the encap:Ethernet lines, not others like
-            # loopback, vpn, ipv6 etc.
-            if words[2] == 'encap:Ethernet' or \
-                    words[1].startswith('flags') and not 'LOOPBACK' in words[1]:
-		if words[0].endswith(':'):
-		    words[0] = words[0][0:-1]
-                cur_iface = NetInterface(words[0])
-                ifaces.append(cur_iface)
-                        
-            else:
+
+        if line[0].isdigit():
+            # It's a new interface.
+            # Check the next line to see if it's link/ether.
+            nextline = stdout_lines[i+1]
+            if not nextline.startswith(' '):
+                raise(RuntimeError("""
+Problem parsing ip link: second line didn't start with a space
+First line: %s
+Second line: %s""" % (line, nextline)))
+            if not nextline.strip().startswith("link/ether"):
                 cur_iface = None
-        else:
-            if not cur_iface:
                 continue
-            if words[0] == 'inet':
-                # Old format:
-                # inet addr:192.168.1.6  Bcast:192.168.1.255  Mask:255.255.255.0
-                match = re.search('addr:(\d+\.\d+\.\d+\.\d+)', line)
-                if match:
-                    cur_iface.ip = match.group(1)
-                match = re.search('Bcast:(\d+\.\d+\.\d+\.\d+)', line)
-                if match:
-                    cur_iface.broadcast = match.group(1)
-                match = re.search('Mask:(\d+\.\d+\.\d+\.\d+)', line)
-                if match:
-                    cur_iface.netmask = match.group(1)
-                # New format:
-                # inet 127.0.0.1  netmask 255.0.0.0
-                match = re.search('inet (\d+\.\d+\.\d+\.\d+)', line)
-                if match:
-                    cur_iface.ip = match.group(1)
-                match = re.search('netmask (\d+\.\d+\.\d+\.\d+)', line)
-                if match:
-                    cur_iface.netmask = match.group(1)
-                match = re.search('ether (..:..:..:..:..:..)', line)
-                if match:
-                    cur_iface.mac = match.group(1)
+
+            # Now we're looking at a valid interface line, e.g.
+            # 2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+            words = line.split()
+            ifacename = words[1]
+            if ifacename.endswith(':'):
+                ifacename = ifacename[:-1]
+            cur_iface = NetInterface(ifacename)
+
+            # XXX maybe should look for UP in flags
+
+            ifaces.append(cur_iface)
+            continue
+
+        if line[0] != ' ':
+            print("Eek, confusing line '%s'" % line)
+            continue
+
+        # It's a continuation line starting with a space.
+        # Glean what info we can.
+        # A typical entry:
+        # 2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+        #     link/ether 00:26:2d:f1:0c:7e brd ff:ff:ff:ff:ff:ff
+        #     inet 192.168.1.96/24 brd 192.168.1.255 scope global eth0
+        #        valid_lft forever preferred_lft forever
+        #     inet6 fe80::226:2dff:fef1:c7e/64 scope link 
+        #        valid_lft forever preferred_lft forever
+
+        if not cur_iface:
+            continue
+
+        words = line.strip().split()
+
+        if words[0] == "link/ether":
+            cur_iface.mac = words[1]
+        elif words[0] == 'inet':
+            cur_iface.ip = words[1]
+            if words[2] == 'brd':
+                cur_iface.broadcast = words[3]
+            # We don't seem to be able to get the netmask with ip.
+            # Does it matter?
 
     # Now we have the list of all interfaces. Find out which are wireless:
     proc = subprocess.Popen('iwconfig', shell=False,

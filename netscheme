@@ -151,7 +151,7 @@ class NetScheme:
             return configfile
 
         # Create was specified, and at least some components of the path
-        # don't exist and need to be created and possibly chowed.
+        # don't exist and need to be created and possibly chowned.
         # For that, we'll need to know the original user, before sudo.
         if sudo_user:
             pw = pwd.getpwnam(sudo_user)
