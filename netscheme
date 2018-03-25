@@ -293,7 +293,7 @@ auto %s""" % (self.iface.name)
             # need to give up and start over again.
             while True:
                 if self.encryption == "wep" or self.encryption == "open":
-                    # iwconfig doesn't work reliably on some systems unless you 
+                    # iwconfig doesn't work reliably on some systems unless you
                     # specify the MAC address of the accesspoint.
                     # However, this code isn't working on Pangolin, not sure why,
                     # so don't require it.
@@ -781,7 +781,8 @@ def reset_current_scheme():
     print "Resetting persistent scheme", schemename
     find_and_set_scheme(schemename, add=False, make_persistent=False)
 
-def find_and_set_scheme(newscheme, add=False, make_persistent=False):
+def find_and_set_scheme(newscheme, add=False,
+                        make_persistent=False, ask_save=False):
 
     # Whether we made a new scheme or used an old one,
     # if there's a persistent scheme specified and the user has specified
@@ -821,7 +822,7 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False):
             if ap.essid == scheme.essid:
                 found = True
                 break
-        else:   
+        else:
             found = True
         if found:
             scheme.set_scheme(add)
@@ -838,7 +839,7 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False):
             if ap.essid == newscheme:
                 # Sometimes we seem to get called a second time. Why?
                 # traceback.print_stack()
-    
+
                 ans = raw_input("Use it anyway? (Y/n) ")
                 if ans != 'y' and ans != 'Y' and ans != '':
                     sys.exit(1)
@@ -862,10 +863,14 @@ def find_and_set_scheme(newscheme, add=False, make_persistent=False):
                 # wrong, the only recourse is to edit the config file.)
                 if make_persistent:
                     ans = 'y'
-                else:
+                elif ask_save:
                     ans = raw_input("Save this scheme for later? (y/N) ")
+                else:
+                    ans = 'y'
                 if ans == 'y' or ans == 'Y':
                     name = scheme.name
+                    if not name:
+                        name = "temp"
                     name = raw_input("Name for this scheme (%s): " % name)
                     name = name.strip()
                     if name:
@@ -980,7 +985,7 @@ Copyright 2010-2016 by Akkana Peck; share and enjoy under the GPL v.2 or later."
                                'encryption':'', 'essid':'', 'key':'',
                                'interface':'', 'dns_servers':''})
 
-            
+
         configfile = NetScheme.schemedirfile('.netscheme')
         print "Reading configurations from", configfile
         config.read(configfile)
