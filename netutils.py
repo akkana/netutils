@@ -118,6 +118,8 @@ class NetInterface:
                                 shell=False, stdout=subprocess.PIPE)
         stdout_lines = proc.communicate()[0].split('\n')
         words = stdout_lines[0].strip().split()
+        if not words:
+            raise RuntimeError("No interface " + self.name)
         if not words[1].startswith(self.name):
             raise RuntimeError("Couldn't parse ip line: '%s'" % stdout_lines[0])
         if not words[2].startswith('<') or not words[2].endswith('>'):
