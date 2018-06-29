@@ -491,10 +491,13 @@ psk="%s"
         except urllib2.URLError, e:
             print "urllib2.URLError:", e
 
+        except Exception, e:
+            print "urlopen failed with an unknown error:", type(e), e
+
         if html == urlcontent:
             print "Looks like we're really connected -- no redirect"
         else:
-            print "Couldn't make a test connection -- probably redirected."
+            print "Couldn't make a test connection -- trying a browser."
             subprocess.call(["quickbrowse", url])
 
     def set_scheme(self, add=False):
