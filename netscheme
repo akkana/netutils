@@ -48,6 +48,13 @@ class NetScheme:
     """
     configdir = None
 
+    # Which DHCP clients to try, in which order.
+    # $i will be replaced with the interface name.
+    DHCP_clients = (
+        [ "dhcpcd", "$i"],
+        [ "dhclient", "-v", "$i"]
+    )
+
     def __init__(self, name, dhcp=True,
                  ip='', netmask='', broadcast='', gateway='',
                  encryption='', essid='', key='', dns_servers=''):
@@ -200,6 +207,25 @@ class NetScheme:
             print "no sudo_user"
 
         return configfile
+
+    def start_dhcp_client(self):
+        print "Getting dhcp"
+
+        # [ "dhclient", "-v", "$i"]
+        for clientargs in NetScheme.DHCP_clients:
+            try:
+                for i, arg in enumerate(clientargs):
+                    if arg == '$i':
+                        clientargs[i] = self.iface.name
+                subprocess.check_call(clientargs)
+                return
+
+            except Exception, e:
+                print "Couldn't run '%s': %s" % (' '.join(clientargs), str(e))
+
+        # If we get here, none of the clients worked.
+        print "Couldn't run any DHCP client"
+        # self.iface.ifconfig_down()
 
     def save(self, filename=None):
         if filename:
@@ -421,20 +447,7 @@ psk="%s"
                 continue
 
         if self.dhcp:
-            print "Getting dhcp"
-            try:
-                # dhcp no longer works with these parameters:
-                # subprocess.check_call(["dhcpcd", "-G", "-C", "resolv.conf",
-                #                        self.iface.name])
-                subprocess.check_call(["dhcpcd",  self.iface.name])
-            #except subprocess.CalledProcessError, e:
-            except Exception, e:
-                print "Couldn't run dhcpcd; trying dhclient"
-                try:
-                    subprocess.call(["dhclient", "-v", self.iface.name])
-                except Exception, e:
-                    print "DHCP failed, error", e.returncode
-                    self.iface.ifconfig_down()
+            self.start_dhcp_client()
 
         else:
             if not self.ip:
@@ -454,7 +467,7 @@ psk="%s"
                 #                 self.gateway])
 
     # Increasingly, public wifi providers are using idiotic
-    # browser authentication that needs to be reset each time.
+    # captive portals that needs to be reset each time.
     # So the net might not really be up. Try to fetch a simple
     # web page and see, and if we're redirected, warn the user.
     # What other clients do:
@@ -491,14 +504,16 @@ psk="%s"
         except urllib2.URLError, e:
             print "urllib2.URLError:", e
 
-        except Exception, e:
-            print "urlopen failed with an unknown error:", type(e), e
-
         if html == urlcontent:
             print "Looks like we're really connected -- no redirect"
         else:
-            print "Couldn't make a test connection -- trying a browser."
-            subprocess.call(["quickbrowse", url])
+            print "Couldn't make a test connection -- probably redirected."
+            print "Calling quickbrowse", url
+            try:
+                subprocess.call(["quickbrowse", url])
+            except Exception as e:
+                print "Problem starting a browser", e
+                raise e
 
     def set_scheme(self, add=False):
         """Make this scheme active on the current machine.

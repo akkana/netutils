@@ -73,6 +73,9 @@ class NetInterface:
         return s
 
     def reload(self):
+        print "Not reloading: let's see if wpa_supplicant has been fixed"
+        return
+
         try:
             # Sometimes the device doesn't exist. I have no idea why.
             fp = open("/sys/class/net/" + self.name + "/device/uevent")
@@ -90,6 +93,13 @@ class NetInterface:
             subprocess.call(["modprobe", "-r", module])
             print "Re-loading", module, "module"
             subprocess.call(["modprobe", module])
+
+            # But reloading often causes the interface to change names:
+            # it randomly jumps between names like wlp2s0 and wlan0.
+            # So after reloading, it's crucial to find the new name.
+            # On a system with multiple wlan interfaces, this is
+            # fraught with difficulty, so make a note of the MAC
+            # address first and make sure we're addressing the same device.
 
     def ifconfig_up(self):
         """Mark the interface UP with ifconfig or ip"""
@@ -278,6 +288,59 @@ def get_interfaces(only_up=False, name=None):
     proc = subprocess.Popen(args, shell=False, stdout=subprocess.PIPE)
     stdout_lines = proc.communicate()[0].split('\n')
 
+    # For some unknown reason, sometimes wlan0 mysteriously shows up
+    # in ip addr show, even though it no longer exists.
+    # Need to know exactly what it says in these cases, but since
+    # we don't get an exception thrown until later when we try to
+    # parse the interfaces, print out the whole thing now.
+    #
+    # Here's an example of bogus output:
+    '''
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+9: wlan0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UNKNOWN group default qlen 1000
+    link/ether dc:85:de:31:6c:97 brd ff:ff:ff:ff:ff:ff
+    inet6 fe80::de85:deff:fe31:6c97/64 scope link 
+       valid_lft forever preferred_lft forever
+=== (end of ip addr show output)
+Taking up interfaces down: [NetInterface wlan0 (wireless) UP]
+Killing dhcp processes
+Killing wpa processes
+Unloading wl module
+Re-loading wl module
+Marking wlan0 down
+Cannot find device "wlan0"
+Not resetting: couldn't open device /sys/class/net/wlan0
+Cannot find device "wlan0"
+=== ip addr show said:
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+10: enp3s0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc pfifo_fast state DOWN group default qlen 1000
+    link/ether 74:d0:2b:71:7a:3e brd ff:ff:ff:ff:ff:ff
+11: wlp2s0: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default qlen 1000
+    link/ether dc:85:de:31:6c:97 brd ff:ff:ff:ff:ff:ff
+=== (end of ip addr show output)
+
+wlp2s0 is wireless
+Unloading alx module
+Re-loading alx module
+Found 5 accesspoints
+========= Calling ['iwconfig', 'wlan0', 'essid', 'SOME ESSID', 'mode', 'managed', 'key', 'off', 'channel', 'auto']
+Error for wireless request "Set ESSID" (8B1A) :
+    '''
+
+    print "=== ip addr show said:"
+    print "\n".join(stdout_lines)
+    print "=== (end of ip addr show output)"
+
     ifaces = []
     cur_iface = None
 
@@ -416,13 +479,17 @@ def get_accesspoints():
             iface.ifconfig_down()
 
     iface = wiface
-    if not iface.is_up():
-        iface.ifconfig_up()
+    try:
         if not iface.is_up():
-            print "Failed to bring", iface, "up. Bailing."
-            return None
-    else:
-        print iface, "is already up"
+            iface.ifconfig_up()
+            if not iface.is_up():
+                print "Failed to bring", iface, "up. Bailing."
+                return None
+        else:
+            print iface, "is already up"
+    except RuntimeError, e:
+        print "Can't check interface", iface, ":", e
+        print "ip addr show may be giving us bogus info"
 
     proc = subprocess.Popen(['iwlist', iface.name, 'scan'],
                             shell=False, stdout=subprocess.PIPE)
@@ -521,6 +588,14 @@ def ifdown_all():
     print "Killing wpa processes"
     killed = kill_by_name(['wpa_supplicant'])
 
+    # It's apparently better to kill wpa_supplicant while the
+    # interface is still up (which takes it down).
+    # But we can't mark it down after unloading the module,
+    # so mark them all down first:
+    for iface in up_ifaces:
+        print "Marking", iface.name, "down"
+        iface.ifconfig_down()
+
     # If wpa_supplicant was one of the killed processes,
     # then our wireless interface is all messed up now,
     # and we'll never be able to connect to an open or WEP
@@ -544,13 +619,6 @@ def ifdown_all():
         print "Didn't kill wpa, no no need to reload modules"
     else:
         print "Didn't have any UP interfaces"
-
-    # It's apparently better to kill wpa_supplicant while the
-    # interface is still up (which takes it down).
-    # So now, finally, we can take everything down:
-    for iface in up_ifaces:
-        print "Marking", iface.name, "down"
-        iface.ifconfig_down()
 
 def kill_by_name(namelist):
     """Kills all running processes that start with any of the
